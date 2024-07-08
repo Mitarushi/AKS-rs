@@ -150,7 +150,7 @@ impl<'a> Add for ModInt<'a> {
     }
 }
 
-impl <'a> Add for &ModInt<'a> {
+impl<'a> Add for &ModInt<'a> {
     type Output = ModInt<'a>;
 
     fn add(self, other: &ModInt) -> ModInt<'a> {
