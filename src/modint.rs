@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use rug::{Assign, Integer};
 use std::fmt::{Debug, Display};
-use std::ops::{Add, AddAssign, Neg, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, Neg, Mul, Sub};
 
 
 #[derive(Debug, Clone)]
@@ -60,13 +60,13 @@ impl FastDiv {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ModRing {
     pub modulo: Integer,
     fast_div: RefCell<FastDiv>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ModInt<'a> {
     pub value: Integer,
     pub ring: &'a ModRing,
@@ -130,20 +130,20 @@ impl ModRing {
     }
 }
 
-impl ModInt<'_> {
-    pub fn add(&self, other: &ModInt) -> ModInt {
+impl<'a> ModInt<'a> {
+    fn add_(&self, other: &ModInt<'a>) -> ModInt<'a> {
         self.ring.add(self, other)
     }
 
-    pub fn sub(&self, other: &ModInt) -> ModInt {
+    fn sub_(&self, other: &ModInt<'a>) -> ModInt<'a> {
         self.ring.sub(self, other)
     }
 
-    pub fn mul(&self, other: &ModInt) -> ModInt {
+    fn mul_(&self, other: &ModInt<'a>) -> ModInt<'a> {
         self.ring.mul(self, other)
     }
 
-    pub fn neg(&self) -> ModInt {
+    fn neg_(&self) -> ModInt<'a> {
         self.ring.neg(self)
     }
 
@@ -171,66 +171,48 @@ impl ModInt<'_> {
 impl<'a> Add for ModInt<'a> {
     type Output = ModInt<'a>;
 
-    fn add(self, other: ModInt) -> ModInt<'a> {
-        self.ring.add(&self, &other)
+    fn add(self, other: ModInt<'a>) -> ModInt<'a> {
+        self.add_(&other)
     }
 }
 
 impl<'a> Add for &ModInt<'a> {
     type Output = ModInt<'a>;
 
-    fn add(self, other: &ModInt) -> ModInt<'a> {
-        self.ring.add(self, other)
-    }
-}
-
-impl<'a> AddAssign for ModInt<'a> {
-    fn add_assign(&mut self, other: ModInt) {
-        *self = self.ring.add(self, &other);
+    fn add(self, other: &ModInt<'a>) -> ModInt<'a> {
+        self.add_(other)
     }
 }
 
 impl<'a> Sub for ModInt<'a> {
     type Output = ModInt<'a>;
 
-    fn sub(self, other: ModInt) -> ModInt<'a> {
-        self.ring.sub(&self, &other)
+    fn sub(self, other: ModInt<'a>) -> ModInt<'a> {
+        self.sub_(&other)
     }
 }
 
 impl<'a> Sub for &ModInt<'a> {
     type Output = ModInt<'a>;
 
-    fn sub(self, other: &ModInt) -> ModInt<'a> {
-        self.ring.sub(self, other)
-    }
-}
-
-impl<'a> SubAssign for ModInt<'a> {
-    fn sub_assign(&mut self, other: ModInt) {
-        *self = self.ring.sub(self, &other);
+    fn sub(self, other: &ModInt<'a>) -> ModInt<'a> {
+        self.sub_(other)
     }
 }
 
 impl<'a> Mul for ModInt<'a> {
     type Output = ModInt<'a>;
 
-    fn mul(self, other: ModInt) -> ModInt<'a> {
-        self.ring.mul(&self, &other)
+    fn mul(self, other: ModInt<'a>) -> ModInt<'a> {
+        self.mul_(&other)
     }
 }
 
 impl<'a> Mul for &ModInt<'a> {
     type Output = ModInt<'a>;
 
-    fn mul(self, other: &ModInt) -> ModInt<'a> {
-        self.ring.mul(self, other)
-    }
-}
-
-impl<'a> MulAssign for ModInt<'a> {
-    fn mul_assign(&mut self, other: ModInt) {
-        *self = self.ring.mul(self, &other);
+    fn mul(self, other: &ModInt<'a>) -> ModInt<'a> {
+        self.mul_(other)
     }
 }
 
@@ -238,7 +220,7 @@ impl<'a> Neg for ModInt<'a> {
     type Output = ModInt<'a>;
 
     fn neg(self) -> ModInt<'a> {
-        self.ring.neg(&self)
+        self.neg_()
     }
 }
 
@@ -246,7 +228,7 @@ impl<'a> Neg for &ModInt<'a> {
     type Output = ModInt<'a>;
 
     fn neg(self) -> ModInt<'a> {
-        self.ring.neg(self)
+        self.neg_()
     }
 }
 

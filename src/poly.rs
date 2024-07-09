@@ -27,7 +27,7 @@ impl<'a> Poly<'a> {
         }
     }
 
-    pub fn add(&self, other: &Poly) -> Poly<'a> {
+    fn add_(&self, other: &Poly) -> Poly<'a> {
         let length = max(self.deg(), other.deg()) + 1;
         let mut coef = vec![self.ring.from_i64(0); length];
         for (i, x) in self.coef.iter().enumerate() {
@@ -40,7 +40,7 @@ impl<'a> Poly<'a> {
         Poly::new(coef, self.ring)
     }
 
-    pub fn sub(&self, other: &Poly) -> Poly<'a> {
+    fn sub_(&self, other: &Poly) -> Poly<'a> {
         let length = max(self.deg(), other.deg()) + 1;
         let mut coef = vec![self.ring.from_i64(0); length];
         for (i, x) in self.coef.iter().enumerate() {
@@ -49,7 +49,7 @@ impl<'a> Poly<'a> {
         for (i, x) in other.coef.iter().enumerate() {
             coef[i] = self.ring.sub(&coef[i], x);
         }
-        self.reduce(&mut coef);
+        Poly::reduce(&mut coef);
         Poly::new(coef, self.ring)
     }
 
@@ -74,7 +74,7 @@ impl<'a> Poly<'a> {
         Poly::new(coef, ring)
     }
 
-    pub fn mul(&self, other: &Poly) -> Poly<'a> {
+    fn mul_(&self, other: &Poly) -> Poly<'a> {
         let min_len = min(self.deg(), other.deg()) + 1;
         let required_bits = self.ring.modulo.significant_bits() + significant_bits(min_len as u64);
         let step = (required_bits + 63) / 64;
@@ -84,8 +84,8 @@ impl<'a> Poly<'a> {
         Poly::from_single_integer(c, self.ring, step)
     }
 
-    pub fn neg(&self) -> Poly<'a> {
-        let mut coef = self.coef.iter().map(|x| self.ring.neg(x)).collect();
+    fn neg_(&self) -> Poly<'a> {
+        let coef = self.coef.iter().map(|x| self.ring.neg(x)).collect();
         Poly {
             coef,
             ring: self.ring,
@@ -97,7 +97,7 @@ impl<'a> Add for Poly<'a> {
     type Output = Poly<'a>;
 
     fn add(self, other: Poly<'a>) -> Poly<'a> {
-        self.add(other)
+        self.add_(&other)
     }
 }
 
@@ -105,7 +105,7 @@ impl<'a> Add for &Poly<'a> {
     type Output = Poly<'a>;
 
     fn add(self, other: &Poly<'a>) -> Poly<'a> {
-        self.add(other)
+        self.add_(other)
     }
 }
 
@@ -113,7 +113,7 @@ impl<'a> Sub for Poly<'a> {
     type Output = Poly<'a>;
 
     fn sub(self, other: Poly<'a>) -> Poly<'a> {
-        self.sub(other)
+        self.sub_(&other)
     }
 }
 
@@ -121,7 +121,7 @@ impl<'a> Sub for &Poly<'a> {
     type Output = Poly<'a>;
 
     fn sub(self, other: &Poly<'a>) -> Poly<'a> {
-        self.sub(other)
+        self.sub_(other)
     }
 }
 
@@ -129,7 +129,7 @@ impl<'a> Mul for Poly<'a> {
     type Output = Poly<'a>;
 
     fn mul(self, other: Poly<'a>) -> Poly<'a> {
-        self.mul(other)
+        self.mul_(&other)
     }
 }
 
@@ -137,6 +137,7 @@ impl<'a> Mul for &Poly<'a> {
     type Output = Poly<'a>;
 
     fn mul(self, other: &Poly<'a>) -> Poly<'a> {
-        self.mul(other)
+        self.mul_(other)
     }
 }
+
