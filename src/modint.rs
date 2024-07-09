@@ -88,8 +88,12 @@ impl ModRing {
     }
 
     pub fn from(&self, value: Integer) -> ModInt {
+        self.from_bounded(self.fast_div.borrow_mut().rem(&value))
+    }
+
+    pub fn from_bounded(&self, value: Integer) -> ModInt {
         ModInt {
-            value: self.fast_div.borrow_mut().rem(&value),
+            value,
             ring: self,
         }
     }
@@ -101,27 +105,19 @@ impl ModRing {
     pub fn add(&self, a: &ModInt, b: &ModInt) -> ModInt {
         let r = Integer::from(&a.value + &b.value);
         let value = if r >= self.modulo { r - &self.modulo } else { r };
-        ModInt {
-            value,
-            ring: self,
-        }
+        self.from_bounded(value)
     }
 
     pub fn sub(&self, a: &ModInt, b: &ModInt) -> ModInt {
         let r = Integer::from(&a.value - &b.value);
         let value = if r < 0 { r + &self.modulo } else { r };
-        ModInt {
-            value,
-            ring: self,
-        }
+        self.from_bounded(value)
     }
 
     pub fn mul(&self, a: &ModInt, b: &ModInt) -> ModInt {
         let r = Integer::from(&a.value * &b.value);
-        ModInt {
-            value: self.fast_div.borrow_mut().rem(&r),
-            ring: self,
-        }
+        let r = self.fast_div.borrow_mut().rem(&r);
+        self.from_bounded(r)
     }
 
     pub fn neg(&self, a: &ModInt) -> ModInt {
@@ -130,10 +126,7 @@ impl ModRing {
         } else {
             Integer::from(&self.modulo - &a.value)
         };
-        ModInt {
-            value,
-            ring: self,
-        }
+        self.from_bounded(value)
     }
 }
 
@@ -168,12 +161,7 @@ impl ModInt<'_> {
         if &g == b {
             InvState::Zero
         } else if g == 1 {
-            InvState::Exists(
-                ModInt {
-                    value: x,
-                    ring: self.ring,
-                }
-            )
+            InvState::Exists(self.ring.from_bounded(x))
         } else {
             InvState::DivisorFound(g)
         }
