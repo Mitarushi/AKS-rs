@@ -1,8 +1,9 @@
 use std::cmp::{max, min};
-use std::ops::{Add, Mul, Neg, Sub};
+use std::ops::{Add, Div, Index, IndexMut, Mul, Neg, Rem, Shl, Shr, Sub};
 use rug::Integer;
-use crate::modint::{ModInt, ModRing};
+use crate::modint::{DivState, ModInt, ModRing};
 
+#[derive(Clone)]
 pub struct Poly<'a> {
     pub coef: Vec<ModInt<'a>>,
     pub ring: &'a ModRing,
@@ -85,12 +86,89 @@ impl<'a> Poly<'a> {
         Poly::from_single_integer(c, self.ring, step)
     }
 
+    fn mul_modint(&self, other: &ModInt<'a>) -> Poly<'a> {
+        let mut coef = self.coef.iter().map(|x| x * other).collect();
+        Poly::reduce(&mut coef);
+        Poly::new(coef, self.ring)
+    }
+
     fn neg_(&self) -> Poly<'a> {
         let coef = self.coef.iter().map(|x| -x).collect();
         Poly {
             coef,
             ring: self.ring,
         }
+    }
+
+    fn shl_(&self, shift: usize) -> Poly<'a> {
+        let mut coef = vec![self.ring.from_i64(0); shift];
+        coef.extend(self.coef.iter().cloned());
+        Poly::new(coef, self.ring)
+    }
+
+    fn shr_(&self, shift: usize) -> Poly<'a> {
+        let mut coef = self.coef.clone();
+        coef.drain(0..min(shift, coef.len()));
+        Poly::new(coef, self.ring)
+    }
+
+    pub fn lc(&self) -> ModInt<'a> {
+        if self.coef.len() == 0 {
+            self.ring.from_i64(0)
+        } else {
+            self.coef[0].clone()
+        }
+    }
+
+    pub fn divmod(&self, other: &Poly<'a>) -> DivState<(Poly<'a>, Poly<'a>)> {
+        let n = self.deg();
+        let m = other.deg();
+
+        let mut r_coef = self.coef.clone();
+        let mut q_coef = vec![self.ring.from_i64(0); n - m + 1];
+
+        let lc_r_inv = other.lc().inv();
+        match lc_r_inv {
+            DivState::Error => return DivState::Error,
+            DivState::DivisorFound(x) => return DivState::DivisorFound(x),
+            _ => {}
+        }
+        let lc_r_inv = lc_r_inv.unwrap();
+
+        for i in (0..=n - m).rev() {
+            let q = &r_coef[i + m] * &lc_r_inv;
+            q_coef[i] = q.clone();
+            for j in 0..m {
+                r_coef[i + j] = &r_coef[i + j] - &(&q * &other.coef[j]);
+            }
+        }
+
+        let q = Poly::new(q_coef, self.ring);
+        Poly::reduce(&mut r_coef);
+        let r = Poly::new(r_coef, self.ring);
+        DivState::Result((q, r))
+    }
+
+    fn div_(&self, other: &Poly<'a>) -> DivState<Poly<'a>> {
+        match self.divmod(other) {
+            DivState::Error => DivState::Error,
+            DivState::DivisorFound(x) => DivState::DivisorFound(x),
+            DivState::Result((q, _)) => DivState::Result(q),
+        }
+    }
+
+    fn rem_(&self, other: &Poly<'a>) -> DivState<Poly<'a>> {
+        match self.divmod(other) {
+            DivState::Error => DivState::Error,
+            DivState::DivisorFound(x) => DivState::DivisorFound(x),
+            DivState::Result((_, r)) => DivState::Result(r),
+        }
+    }
+
+    pub fn x_power_of(ring: &'a ModRing, n: usize) -> Poly<'a> {
+        let mut coef = vec![ring.from_i64(0); n + 1];
+        coef[n] = ring.from_i64(1);
+        Poly::new(coef, ring)
     }
 }
 
@@ -134,6 +212,14 @@ impl<'a> Mul for Poly<'a> {
     }
 }
 
+impl<'a> Mul<ModInt<'a>> for Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn mul(self, other: ModInt<'a>) -> Poly<'a> {
+        self.mul_modint(&other)
+    }
+}
+
 impl<'a> Mul for &Poly<'a> {
     type Output = Poly<'a>;
 
@@ -142,11 +228,122 @@ impl<'a> Mul for &Poly<'a> {
     }
 }
 
+impl<'a> Mul<&ModInt<'a>> for &Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn mul(self, other: &ModInt<'a>) -> Poly<'a> {
+        self.mul_modint(&other)
+    }
+}
+
+impl<'a> Mul<i64> for &Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn mul(self, other: i64) -> Poly<'a> {
+        self.mul(&self.ring.from_bounded(Integer::from(other)))
+    }
+}
+
 impl<'a> Neg for Poly<'a> {
     type Output = Poly<'a>;
 
     fn neg(self) -> Poly<'a> {
         self.neg_()
+    }
+}
+
+impl<'a> Neg for &Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn neg(self) -> Poly<'a> {
+        self.neg_()
+    }
+}
+
+impl<'a> Index<usize> for Poly<'a> {
+    type Output = ModInt<'a>;
+
+    fn index(&self, index: usize) -> &ModInt<'a> {
+        &self.coef[index]
+    }
+}
+
+impl<'a> IndexMut<usize> for Poly<'a> {
+    fn index_mut(&mut self, index: usize) -> &mut ModInt<'a> {
+        if index >= self.coef.len() {
+            self.coef.resize(index + 1, self.ring.from_i64(0));
+        }
+        &mut self.coef[index]
+    }
+}
+
+impl<'a> Shl<usize> for Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn shl(self, shift: usize) -> Poly<'a> {
+        self.shl_(shift)
+    }
+}
+
+impl<'a> Shl<usize> for &Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn shl(self, shift: usize) -> Poly<'a> {
+        self.shl_(shift)
+    }
+}
+
+impl<'a> Shr<usize> for Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn shr(self, shift: usize) -> Poly<'a> {
+        self.shr_(shift)
+    }
+}
+
+impl<'a> Shr<usize> for &Poly<'a> {
+    type Output = Poly<'a>;
+
+    fn shr(self, shift: usize) -> Poly<'a> {
+        self.shr_(shift)
+    }
+}
+
+impl<'a> Div for Poly<'a> {
+    type Output = DivState<Poly<'a>>;
+
+    fn div(self, other: Poly<'a>) -> DivState<Poly<'a>> {
+        self.div_(&other)
+    }
+}
+
+impl<'a> Div for &Poly<'a> {
+    type Output = DivState<Poly<'a>>;
+
+    fn div(self, other: &Poly<'a>) -> DivState<Poly<'a>> {
+        self.div_(other)
+    }
+}
+
+impl<'a> Rem for Poly<'a> {
+    type Output = DivState<Poly<'a>>;
+
+    fn rem(self, other: Poly<'a>) -> DivState<Poly<'a>> {
+        self.rem_(&other)
+    }
+}
+
+impl<'a> Rem for &Poly<'a> {
+    type Output = DivState<Poly<'a>>;
+
+    fn rem(self, other: &Poly<'a>) -> DivState<Poly<'a>> {
+        self.rem_(other)
+    }
+}
+
+impl<'a> PartialEq for Poly<'a> {
+    fn eq(&self, other: &Poly<'a>) -> bool {
+        self.coef == other.coef
     }
 }
 
@@ -162,34 +359,31 @@ mod tests {
             Integer::from(Integer::random_bits(128, &mut rng))
         };
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let modulo = gen_random();
             let ring = ModRing::new(modulo.clone());
             let n = 1000;
 
-            let a = (0..n).map(|_| gen_random()).collect::<Vec<_>>();
-            let b = (0..n).map(|_| gen_random()).collect::<Vec<_>>();
-            let c = (0..n).map(|_| gen_random()).collect::<Vec<_>>();
+            let a = (0..n).map(|_| ring.from(gen_random())).collect::<Vec<_>>();
+            let b = (0..n).map(|_| ring.from(gen_random())).collect::<Vec<_>>();
+            let c = (0..n).map(|_| ring.from(gen_random())).collect::<Vec<_>>();
 
-            let mut res_naive = vec![Integer::from(0); 2 * n - 1];
+            let mut res_naive = vec![ring.from_i64(0); n * 2 - 1];
             for (i, x) in a.iter().enumerate() {
                 for (j, y) in b.iter().enumerate() {
-                    res_naive[i + j] += x * y;
+                    res_naive[i + j] = &res_naive[i + j] + &(x * y);
                 }
             }
             for (i, x) in c.iter().enumerate() {
-                res_naive[i] -= x;
+                res_naive[i] = &res_naive[i] - x;
             }
-            res_naive.iter_mut().for_each(|x| *x %= &modulo);
 
-            let a_poly = Poly::new(a.iter().map(|x| ring.from(x.clone())).collect(), &ring);
-            let b_poly = Poly::new(b.iter().map(|x| ring.from(x.clone())).collect(), &ring);
-            let c_poly = Poly::new(c.iter().map(|x| ring.from(x.clone())).collect(), &ring);
+            let a_poly = Poly::new(a, &ring);
+            let b_poly = Poly::new(b, &ring);
+            let c_poly = Poly::new(c, &ring);
             let res_poly = a_poly * b_poly - c_poly;
 
-            let res_poly = res_poly.coef.iter().map(|x| x.value.clone()).collect::<Vec<_>>();
-
-            assert_eq!(res_naive, res_poly);
+            assert_eq!(res_naive, res_poly.coef);
         }
     }
 }

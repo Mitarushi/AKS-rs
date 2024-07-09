@@ -79,10 +79,19 @@ pub struct ModInt<'a> {
     pub ring: &'a ModRing,
 }
 
-pub enum InvState<'a> {
-    Zero,
-    Exists(ModInt<'a>),
+pub enum DivState<T> {
+    Error,
+    Result(T),
     DivisorFound(Integer),
+}
+
+impl<T> DivState<T> {
+    pub fn unwrap(self) -> T {
+        match self {
+            DivState::Result(x) => x,
+            _ => panic!("DivState::unwrap()"),
+        }
+    }
 }
 
 impl ModRing {
@@ -158,7 +167,7 @@ impl<'a> ModInt<'a> {
         self.value.is_zero()
     }
 
-    pub fn inv(&self) -> InvState {
+    pub fn inv(&self) -> DivState<ModInt<'a>> {
         let a = &self.value;
         let b = &self.ring.modulo;
         let mut g = Integer::new();
@@ -166,11 +175,11 @@ impl<'a> ModInt<'a> {
         (&mut g, &mut x).assign(a.extended_gcd_ref(b));
 
         if &g == b {
-            InvState::Zero
+            DivState::Error
         } else if g == 1 {
-            InvState::Exists(self.ring.from_bounded(x))
+            DivState::Result(self.ring.from_bounded(x))
         } else {
-            InvState::DivisorFound(g)
+            DivState::DivisorFound(g)
         }
     }
 }
@@ -236,6 +245,12 @@ impl<'a> Neg for &ModInt<'a> {
 
     fn neg(self) -> ModInt<'a> {
         self.neg_()
+    }
+}
+
+impl<'a> PartialEq for ModInt<'a> {
+    fn eq(&self, other: &ModInt<'a>) -> bool {
+        self.value == other.value
     }
 }
 
