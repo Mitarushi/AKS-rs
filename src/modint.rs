@@ -1,9 +1,10 @@
 use std::cell::RefCell;
-use rug::Integer;
+use rug::{Assign, Integer};
 use std::fmt::{Debug, Display};
 use std::ops::{Add, AddAssign, Neg, Mul, MulAssign, Sub, SubAssign};
 
 
+#[derive(Debug, Clone)]
 struct FastDiv {
     b_log: u32,
     m_len: u32,
@@ -59,14 +60,22 @@ impl FastDiv {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ModRing {
-    modulo: Integer,
+    pub modulo: Integer,
     fast_div: RefCell<FastDiv>,
 }
 
+#[derive(Debug, Clone)]
 pub struct ModInt<'a> {
-    value: Integer,
-    ring: &'a ModRing,
+    pub value: Integer,
+    pub ring: &'a ModRing,
+}
+
+pub enum InvState<'a> {
+    Zero,
+    Exists(ModInt<'a>),
+    DivisorFound(Integer),
 }
 
 impl ModRing {
@@ -83,6 +92,10 @@ impl ModRing {
             value: self.fast_div.borrow_mut().rem(&value),
             ring: self,
         }
+    }
+
+    pub fn from_i64(&self, value: i64) -> ModInt {
+        self.from(Integer::from(value))
     }
 
     pub fn add(&self, a: &ModInt, b: &ModInt) -> ModInt {
@@ -139,6 +152,31 @@ impl ModInt<'_> {
 
     pub fn neg(&self) -> ModInt {
         self.ring.neg(self)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.value.is_zero()
+    }
+
+    pub fn inv(&self) -> InvState {
+        let a = &self.value;
+        let b = &self.ring.modulo;
+        let mut g = Integer::new();
+        let mut x = Integer::new();
+        (&mut g, &mut x).assign(a.extended_gcd_ref(b));
+
+        if &g == b {
+            InvState::Zero
+        } else if g == 1 {
+            InvState::Exists(
+                ModInt {
+                    value: x,
+                    ring: self.ring,
+                }
+            )
+        } else {
+            InvState::DivisorFound(g)
+        }
     }
 }
 
