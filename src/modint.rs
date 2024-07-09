@@ -29,10 +29,17 @@ impl FastDiv {
     fn double_inv(&mut self) {
         let b = Integer::from(1) << self.b_log;
         let inv = &self.inv * (2 * b - &self.inv * &self.modulo);
-        let inv = inv >> self.m_len;
+        let mut inv = inv >> self.m_len;
+
+        let b_log_next = self.b_log * 2 - self.m_len;
+        let b_next = Integer::from(1) << b_log_next;
+        let r = b_next - &inv * &self.modulo;
+        if r >= self.modulo {
+            inv += 1;
+        }
 
         self.inv = inv;
-        self.b_log = self.b_log * 2 - self.m_len;
+        self.b_log = b_log_next;
     }
 
     fn double_until(&mut self, n: u32) {
@@ -246,25 +253,33 @@ impl<'a> Debug for ModInt<'a> {
 
 #[cfg(test)]
 mod tests {
+    use rug::{Complete, rand};
     use super::*;
 
     #[test]
     fn test_modint() {
-        let mod_int = 1000000007i128;
-        let a_int = 1414213562373i128;
-        let b_int = 3141592653589i128;
+        let mut rng = rand::RandState::new();
+        let mut gen_random = || -> Integer {
+            Integer::from(Integer::random_bits(128, &mut rng))
+        };
 
-        let ring = ModRing::new(Integer::from(mod_int));
-        let a = ring.from(Integer::from(a_int));
-        let b = ring.from(Integer::from(b_int));
+        for _ in 0..100 {
+            let modulo = gen_random();
+            let a = gen_random();
+            let b = gen_random();
 
-        let c = &a + &b;
-        assert_eq!(c.value, (a_int + b_int) % mod_int);
+            let ring = ModRing::new(modulo.clone());
+            let a_mod = ring.from(a.clone());
+            let b_mod = ring.from(b.clone());
 
-        let c = &a - &b;
-        assert_eq!(c.value, (a_int - b_int) % mod_int + mod_int);
+            let c = &a_mod + &b_mod;
+            assert_eq!(c.value, (&a + &b).complete() % &modulo);
 
-        let c = &a * &b;
-        assert_eq!(c.value, (a_int * b_int) % mod_int);
+            let c = &a_mod - &b_mod;
+            assert_eq!(c.value, ((&a - &b).complete() % &modulo + &modulo) % &modulo);
+
+            let c = &a_mod * &b_mod;
+            assert_eq!(c.value, (&a * &b).complete() % &modulo);
+        }
     }
 }
