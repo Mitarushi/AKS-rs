@@ -18,6 +18,12 @@ impl<'a> Poly<'a> {
         Poly { coef, ring }
     }
 
+    pub fn from_int_vec(coef: Vec<Integer>, ring: &'a ModRing) -> Poly<'a> {
+        let mut coef = coef.into_iter().map(|x| ring.from(x)).collect();
+        Poly::reduce(&mut coef);
+        Poly::new(coef, ring)
+    }
+
     pub fn len(&self) -> usize {
         self.coef.len()
     }
@@ -111,8 +117,7 @@ impl<'a> Poly<'a> {
     }
 
     fn shr_(&self, shift: usize) -> Poly<'a> {
-        let mut coef = self.coef.clone();
-        coef.drain(0..min(shift, coef.len()));
+        let coef = self.coef[min(shift, self.len())..].to_vec();
         Poly::new(coef, self.ring)
     }
 
