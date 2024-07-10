@@ -7,6 +7,7 @@ mod modint;
 mod poly;
 mod poly_ring;
 mod overload_macro;
+mod prime;
 
 fn main() {
     let mut rng = rug::rand::RandState::new();
