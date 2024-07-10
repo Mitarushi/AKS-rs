@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::ops::{Add, Neg, Mul, Sub};
 use rug::Integer;
 use rug::integer::Order;
@@ -47,7 +47,10 @@ impl<'a> FastPolyDiv<'a> {
         let x_deg = max(x.deg(), 0) as usize;
         self.double_until(x_deg);
         let inv = &self.inv >> (self.b_deg - x_deg);
-        let q = &inv * x >> x_deg;
+
+        let pre_shift = min(x_deg, self.m_len - 1);
+        let post_shift = x_deg - pre_shift;
+        let q = &inv * (x >> pre_shift) >> post_shift;
         q
     }
 
