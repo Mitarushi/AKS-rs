@@ -135,8 +135,8 @@ impl<'a> Poly<'a> {
     }
 
     pub fn divmod(&self, other: &Poly<'a>) -> DivState<(Poly<'a>, Poly<'a>)> {
-        if self.len() == 0 {
-            return DivState::Result((Poly::zero(self.ring), Poly::zero(self.ring)));
+        if self.len() < other.len() {
+            return DivState::Result((Poly::zero(self.ring), self.clone()));
         }
 
         let n = self.deg() as usize;
