@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use rug::{Assign, Integer};
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Neg, Mul, Sub};
-
+use crate::{overload, overload_eq, overload_unary};
 
 #[derive(Debug, Clone)]
 struct FastDiv {
@@ -163,6 +163,10 @@ impl<'a> ModInt<'a> {
         self.ring.neg(self)
     }
 
+    fn eq_(&self, other: &ModInt<'a>) -> bool {
+        self.value == other.value
+    }
+
     pub fn is_zero(&self) -> bool {
         self.value.is_zero()
     }
@@ -184,75 +188,11 @@ impl<'a> ModInt<'a> {
     }
 }
 
-impl<'a> Add for ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn add(self, other: ModInt<'a>) -> ModInt<'a> {
-        self.add_(&other)
-    }
-}
-
-impl<'a> Add for &ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn add(self, other: &ModInt<'a>) -> ModInt<'a> {
-        self.add_(other)
-    }
-}
-
-impl<'a> Sub for ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn sub(self, other: ModInt<'a>) -> ModInt<'a> {
-        self.sub_(&other)
-    }
-}
-
-impl<'a> Sub for &ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn sub(self, other: &ModInt<'a>) -> ModInt<'a> {
-        self.sub_(other)
-    }
-}
-
-impl<'a> Mul for ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn mul(self, other: ModInt<'a>) -> ModInt<'a> {
-        self.mul_(&other)
-    }
-}
-
-impl<'a> Mul for &ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn mul(self, other: &ModInt<'a>) -> ModInt<'a> {
-        self.mul_(other)
-    }
-}
-
-impl<'a> Neg for ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn neg(self) -> ModInt<'a> {
-        self.neg_()
-    }
-}
-
-impl<'a> Neg for &ModInt<'a> {
-    type Output = ModInt<'a>;
-
-    fn neg(self) -> ModInt<'a> {
-        self.neg_()
-    }
-}
-
-impl<'a> PartialEq for ModInt<'a> {
-    fn eq(&self, other: &ModInt<'a>) -> bool {
-        self.value == other.value
-    }
-}
+overload!('a, Add, ModInt<'a>, add, add_);
+overload!('a, Sub, ModInt<'a>, sub, sub_);
+overload!('a, Mul, ModInt<'a>, mul, mul_);
+overload_unary!('a, Neg, ModInt<'a>, neg, neg_);
+overload_eq!('a, PartialEq, ModInt<'a>, eq, eq_);
 
 impl<'a> Display for ModInt<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

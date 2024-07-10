@@ -3,6 +3,7 @@ use std::cmp::max;
 use std::ops::{Add, Neg, Mul, Sub};
 use rug::Integer;
 use rug::integer::Order;
+use crate::{overload, overload_eq, overload_unary};
 use crate::poly::Poly;
 
 #[derive(Clone, Debug)]
@@ -125,6 +126,10 @@ impl<'a, 'b> ModPoly<'a, 'b> {
         self.ring.neg(self)
     }
 
+    fn eq_(&self, other: &ModPoly<'a, 'b>) -> bool {
+        self.value == other.value
+    }
+
     pub fn pow(&self, n: &Integer) -> ModPoly<'a, 'b> {
         let mut y = self.ring.from_bounded(Poly::one(self.value.ring));
         let n_bits = n.to_digits::<bool>(Order::Lsf);
@@ -132,76 +137,18 @@ impl<'a, 'b> ModPoly<'a, 'b> {
         for i in n_bits.into_iter().rev() {
             y = &y * &y;
             if i {
-                y = &y * &self;
+                y = &y * self;
             }
         }
         y
     }
 }
 
-impl<'a, 'b> Add for ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn add(self, other: ModPoly<'a, 'b>) -> ModPoly<'a, 'b> {
-        self.add_(&other)
-    }
-}
-
-impl<'a, 'b> Add for &ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn add(self, other: &ModPoly<'a, 'b>) -> ModPoly<'a, 'b> {
-        self.add_(other)
-    }
-}
-
-impl<'a, 'b> Sub for ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn sub(self, other: ModPoly<'a, 'b>) -> ModPoly<'a, 'b> {
-        self.sub_(&other)
-    }
-}
-
-impl<'a, 'b> Sub for &ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn sub(self, other: &ModPoly<'a, 'b>) -> ModPoly<'a, 'b> {
-        self.sub_(other)
-    }
-}
-
-impl<'a, 'b> Mul for ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn mul(self, other: ModPoly<'a, 'b>) -> ModPoly<'a, 'b> {
-        self.mul_(&other)
-    }
-}
-
-impl<'a, 'b> Mul for &ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn mul(self, other: &ModPoly<'a, 'b>) -> ModPoly<'a, 'b> {
-        self.mul_(other)
-    }
-}
-
-impl<'a, 'b> Neg for ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn neg(self) -> ModPoly<'a, 'b> {
-        self.neg_()
-    }
-}
-
-impl<'a, 'b> Neg for &ModPoly<'a, 'b> {
-    type Output = ModPoly<'a, 'b>;
-
-    fn neg(self) -> ModPoly<'a, 'b> {
-        self.neg_()
-    }
-}
+overload!('a, 'b, Add, ModPoly<'a, 'b>, add, add_);
+overload!('a, 'b, Sub, ModPoly<'a, 'b>, sub, sub_);
+overload!('a, 'b, Mul, ModPoly<'a, 'b>, mul, mul_);
+overload_unary!('a, 'b, Neg, ModPoly<'a, 'b>, neg, neg_);
+overload_eq!('a, 'b, PartialEq, ModPoly<'a, 'b>, eq, eq_);
 
 #[cfg(test)]
 mod tests {

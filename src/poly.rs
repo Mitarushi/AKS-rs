@@ -2,6 +2,7 @@ use std::cmp::{max, min};
 use std::ops::{Add, Div, Index, IndexMut, Mul, Neg, Rem, Shl, Shr, Sub};
 use rug::Integer;
 use crate::modint::{DivState, ModInt, ModRing};
+use crate::{overload, overload_eq, overload_unary};
 
 #[derive(Clone, Debug)]
 pub struct Poly<'a> {
@@ -102,6 +103,10 @@ impl<'a> Poly<'a> {
         Poly::new(coef, self.ring)
     }
 
+    fn mul_i64(&self, other: &i64) -> Poly<'a> {
+        self.mul_modint(&self.ring.from_i64(*other))
+    }
+
     fn neg_(&self) -> Poly<'a> {
         let coef = self.coef.iter().map(|x| -x).collect();
         Poly {
@@ -110,14 +115,14 @@ impl<'a> Poly<'a> {
         }
     }
 
-    fn shl_(&self, shift: usize) -> Poly<'a> {
-        let mut coef = vec![self.ring.from_i64(0); shift];
+    fn shl_(&self, shift: &usize) -> Poly<'a> {
+        let mut coef = vec![self.ring.from_i64(0); *shift];
         coef.extend(self.coef.iter().cloned());
         Poly::new(coef, self.ring)
     }
 
-    fn shr_(&self, shift: usize) -> Poly<'a> {
-        let coef = self.coef[min(shift, self.len())..].to_vec();
+    fn shr_(&self, shift: &usize) -> Poly<'a> {
+        let coef = self.coef[min(*shift, self.len())..].to_vec();
         Poly::new(coef, self.ring)
     }
 
@@ -178,6 +183,10 @@ impl<'a> Poly<'a> {
         }
     }
 
+    fn eq_(&self, other: &Poly<'a>) -> bool {
+        self.coef == other.coef
+    }
+
     pub fn x_power_of(ring: &'a ModRing, n: usize) -> Poly<'a> {
         let mut coef = vec![ring.from_i64(0); n + 1];
         coef[n] = ring.from_i64(1);
@@ -193,93 +202,17 @@ impl<'a> Poly<'a> {
     }
 }
 
-impl<'a> Add for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn add(self, other: Poly<'a>) -> Poly<'a> {
-        self.add_(&other)
-    }
-}
-
-impl<'a> Add for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn add(self, other: &Poly<'a>) -> Poly<'a> {
-        self.add_(other)
-    }
-}
-
-impl<'a> Sub for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn sub(self, other: Poly<'a>) -> Poly<'a> {
-        self.sub_(&other)
-    }
-}
-
-impl<'a> Sub for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn sub(self, other: &Poly<'a>) -> Poly<'a> {
-        self.sub_(other)
-    }
-}
-
-impl<'a> Mul for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn mul(self, other: Poly<'a>) -> Poly<'a> {
-        self.mul_(&other)
-    }
-}
-
-impl<'a> Mul<ModInt<'a>> for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn mul(self, other: ModInt<'a>) -> Poly<'a> {
-        self.mul_modint(&other)
-    }
-}
-
-impl<'a> Mul for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn mul(self, other: &Poly<'a>) -> Poly<'a> {
-        self.mul_(other)
-    }
-}
-
-impl<'a> Mul<&ModInt<'a>> for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn mul(self, other: &ModInt<'a>) -> Poly<'a> {
-        self.mul_modint(&other)
-    }
-}
-
-impl<'a> Mul<i64> for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn mul(self, other: i64) -> Poly<'a> {
-        self.mul(&self.ring.from_bounded(Integer::from(other)))
-    }
-}
-
-impl<'a> Neg for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn neg(self) -> Poly<'a> {
-        self.neg_()
-    }
-}
-
-impl<'a> Neg for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn neg(self) -> Poly<'a> {
-        self.neg_()
-    }
-}
+overload!('a, Add, Poly<'a>, add, add_);
+overload!('a, Sub, Poly<'a>, sub, sub_);
+overload!('a, Mul, Poly<'a>, mul, mul_);
+overload!('a, Mul, Poly<'a>, ModInt<'a>, mul, mul_modint);
+overload!('a, Mul, Poly<'a>, i64, mul, mul_i64);
+overload_unary!('a, Neg, Poly<'a>, neg, neg_);
+overload!('a, Shl, Poly<'a>, usize, shl, shl_);
+overload!('a, Shr, Poly<'a>, usize, shr, shr_);
+overload!('a, Div, Poly<'a>, Poly<'a>, DivState<Poly<'a>>, div, div_);
+overload!('a, Rem, Poly<'a>, Poly<'a>, DivState<Poly<'a>>, rem, rem_);
+overload_eq!('a, PartialEq, Poly<'a>, eq, eq_);
 
 impl<'a> Index<usize> for Poly<'a> {
     type Output = ModInt<'a>;
@@ -295,76 +228,6 @@ impl<'a> IndexMut<usize> for Poly<'a> {
             self.coef.resize(index + 1, self.ring.from_i64(0));
         }
         &mut self.coef[index]
-    }
-}
-
-impl<'a> Shl<usize> for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn shl(self, shift: usize) -> Poly<'a> {
-        self.shl_(shift)
-    }
-}
-
-impl<'a> Shl<usize> for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn shl(self, shift: usize) -> Poly<'a> {
-        self.shl_(shift)
-    }
-}
-
-impl<'a> Shr<usize> for Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn shr(self, shift: usize) -> Poly<'a> {
-        self.shr_(shift)
-    }
-}
-
-impl<'a> Shr<usize> for &Poly<'a> {
-    type Output = Poly<'a>;
-
-    fn shr(self, shift: usize) -> Poly<'a> {
-        self.shr_(shift)
-    }
-}
-
-impl<'a> Div for Poly<'a> {
-    type Output = DivState<Poly<'a>>;
-
-    fn div(self, other: Poly<'a>) -> DivState<Poly<'a>> {
-        self.div_(&other)
-    }
-}
-
-impl<'a> Div for &Poly<'a> {
-    type Output = DivState<Poly<'a>>;
-
-    fn div(self, other: &Poly<'a>) -> DivState<Poly<'a>> {
-        self.div_(other)
-    }
-}
-
-impl<'a> Rem for Poly<'a> {
-    type Output = DivState<Poly<'a>>;
-
-    fn rem(self, other: Poly<'a>) -> DivState<Poly<'a>> {
-        self.rem_(&other)
-    }
-}
-
-impl<'a> Rem for &Poly<'a> {
-    type Output = DivState<Poly<'a>>;
-
-    fn rem(self, other: &Poly<'a>) -> DivState<Poly<'a>> {
-        self.rem_(other)
-    }
-}
-
-impl<'a> PartialEq for Poly<'a> {
-    fn eq(&self, other: &Poly<'a>) -> bool {
-        self.coef == other.coef
     }
 }
 
