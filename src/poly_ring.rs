@@ -4,10 +4,11 @@ use std::ops::{Add, Neg, Mul, Sub};
 use rug::Integer;
 use rug::integer::Order;
 use crate::{overload, overload_eq, overload_unary};
+use crate::modint::ModInt;
 use crate::poly::Poly;
 
 #[derive(Clone, Debug)]
-struct FastPolyDiv<'a> {
+pub struct FastPolyDiv<'a> {
     b_deg: usize,
     m_len: usize,
     inv: Poly<'a>,
@@ -61,10 +62,53 @@ impl<'a> FastPolyDiv<'a> {
     }
 }
 
+
+// Poly for x^n - a
+#[derive(Clone, Debug)]
+pub struct NearMonomialDiv<'a> {
+    pub n: usize,
+    pub a: ModInt<'a>,
+}
+
+impl<'a> NearMonomialDiv<'a> {
+    pub fn new(n: usize, a: ModInt<'a>) -> Self {
+        NearMonomialDiv {
+            n,
+            a,
+        }
+    }
+
+    pub fn rem(&self, x: &Poly<'a>) -> Poly<'a> {
+        let mut r_coef = x.coef.clone();
+        for i in (self.n..r_coef.len()).rev() {
+            let j = i - self.n;
+            r_coef[j] = &r_coef[j] + &r_coef[i] * &self.a;
+        }
+        r_coef.truncate(self.n);
+        Poly::reduce(&mut r_coef);
+        Poly::new(r_coef, x.ring)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FastDivEnum<'a> {
+    Normal(FastPolyDiv<'a>),
+    NearMonomial(NearMonomialDiv<'a>),
+}
+
+impl<'a> FastDivEnum<'a> {
+    pub fn rem(&mut self, x: &Poly<'a>) -> Poly<'a> {
+        match self {
+            FastDivEnum::Normal(ref mut fast_div) => fast_div.rem(x),
+            FastDivEnum::NearMonomial(near_monomial_div) => near_monomial_div.rem(x),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ModPolyRing<'a> {
     pub modulo: Poly<'a>,
-    fast_div: RefCell<FastPolyDiv<'a>>,
+    fast_div: RefCell<FastDivEnum<'a>>,
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +120,13 @@ pub struct ModPoly<'a, 'b> {
 impl<'a, 'b> ModPolyRing<'a> {
     pub fn new(modulo: Poly<'a>) -> Self {
         let fast_div = FastPolyDiv::new(modulo.clone());
+        ModPolyRing {
+            modulo,
+            fast_div: RefCell::new(FastDivEnum::Normal(fast_div)),
+        }
+    }
+
+    pub fn from_fast_div(modulo: Poly<'a>, fast_div: FastDivEnum<'a>) -> ModPolyRing<'a> {
         ModPolyRing {
             modulo,
             fast_div: RefCell::new(fast_div),

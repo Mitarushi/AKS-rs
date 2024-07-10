@@ -1,7 +1,7 @@
 use rug::Integer;
 use crate::modint::ModRing;
 use crate::poly::Poly;
-use crate::poly_ring::ModPolyRing;
+use crate::poly_ring::{FastDivEnum, ModPolyRing, NearMonomialDiv};
 
 mod modint;
 mod poly;
@@ -18,11 +18,12 @@ fn main() {
         let n = n.next_prime();
         let n_ring = ModRing::new(n.clone());
 
-        let mut modulo_coef = (0..1024).map(|_| random_int()).collect::<Vec<_>>();
-        modulo_coef.push(Integer::from(1));
-        let modulo_coef = modulo_coef.into_iter().map(|x| n_ring.from(x)).collect::<Vec<_>>();
-        let modulo = Poly::new(modulo_coef, &n_ring);
-        let ring = ModPolyRing::new(modulo.clone());
+        println!("here");
+
+        let b = n_ring.from(random_int());
+        let modulo = Poly::x_power_of(&n_ring, 1024) + Poly::new(vec![b.clone()], &n_ring);
+        let fast_div = FastDivEnum::NearMonomial(NearMonomialDiv::new(1024, b.clone()));
+        let ring = ModPolyRing::from_fast_div(modulo.clone(), fast_div);
 
         let a = n_ring.from(random_int());
         let x_a = Poly::new(vec![a.clone(), n_ring.from_i64(1)], &n_ring);

@@ -33,7 +33,7 @@ impl<'a> Poly<'a> {
         self.coef.len() as isize - 1
     }
 
-    fn reduce(coef: &mut Vec<ModInt<'a>>) {
+    pub fn reduce(coef: &mut Vec<ModInt<'a>>) {
         while coef.len() > 0 && coef.last().unwrap().is_zero() {
             coef.pop();
         }
