@@ -52,18 +52,19 @@ pub fn aks(n: &Integer) -> bool {
 
     let r = (2..)
         .filter(|r| {
-            let mut x = n_ring.from_i64(1);
-            let r = n_ring.from_i64(*r);
+            let mut i = 1;
+            let x = n.mod_u(*r);
             for _ in 0..lgn2 {
-                x = x * &r;
-                if x.value == 1 {
+                i = i * x % *r;
+                if i == 1 {
                     return false;
                 }
             }
             true
         }).next().unwrap();
 
-    let phi_r = phi(r);
+    let phi_r = phi(r as i64);
+    println!("r: {}, phi(r): {}", r, phi_r);
     let a_limit = ((phi_r as f64).sqrt() * lgn as f64).floor() as i64;
 
     let poly = Poly::x_power_of(&n_ring, r as usize) - Poly::new(vec![n_ring.from_i64(1)], &n_ring);
@@ -73,6 +74,7 @@ pub fn aks(n: &Integer) -> bool {
     (1..=a_limit).
         all(
             |a| {
+                println!("a: {}", a);
                 let x_a = Poly::new(vec![n_ring.from_i64(a), n_ring.from_i64(1)], &n_ring);
                 let x_a = poly_ring.from(x_a);
                 let x_a_n = x_a.pow(n);
