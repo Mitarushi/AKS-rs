@@ -67,7 +67,7 @@ impl FastDiv {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModRing {
     pub modulo: Integer,
     fast_div: RefCell<FastDiv>,

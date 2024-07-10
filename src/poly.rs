@@ -3,7 +3,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Neg, Rem, Shl, Shr, Sub};
 use rug::Integer;
 use crate::modint::{DivState, ModInt, ModRing};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Poly<'a> {
     pub coef: Vec<ModInt<'a>>,
     pub ring: &'a ModRing,
@@ -18,8 +18,12 @@ impl<'a> Poly<'a> {
         Poly { coef, ring }
     }
 
-    pub fn deg(&self) -> usize {
-        self.coef.len() - 1
+    pub fn len(&self) -> usize {
+        self.coef.len()
+    }
+
+    pub fn deg(&self) -> isize {
+        self.coef.len() as isize - 1
     }
 
     fn reduce(coef: &mut Vec<ModInt<'a>>) {
@@ -29,7 +33,7 @@ impl<'a> Poly<'a> {
     }
 
     fn add_(&self, other: &Poly<'a>) -> Poly<'a> {
-        let length = max(self.deg(), other.deg()) + 1;
+        let length = max(self.len(), other.len());
         let mut coef = vec![self.ring.from_i64(0); length];
         for (i, x) in self.coef.iter().enumerate() {
             coef[i] = x.clone();
@@ -42,7 +46,7 @@ impl<'a> Poly<'a> {
     }
 
     fn sub_(&self, other: &Poly<'a>) -> Poly<'a> {
-        let length = max(self.deg(), other.deg()) + 1;
+        let length = max(self.len(), other.len());
         let mut coef = vec![self.ring.from_i64(0); length];
         for (i, x) in self.coef.iter().enumerate() {
             coef[i] = x.clone();
@@ -77,7 +81,7 @@ impl<'a> Poly<'a> {
     }
 
     fn mul_(&self, other: &Poly) -> Poly<'a> {
-        let min_len = min(self.deg(), other.deg()) + 1;
+        let min_len = min(self.len(), other.len());
         let required_bits = self.ring.modulo.significant_bits() * 2 + significant_bits(min_len as u64);
         let step = (required_bits + 63) / 64;
         let a = self.to_single_integer(step);
@@ -116,13 +120,17 @@ impl<'a> Poly<'a> {
         if self.coef.len() == 0 {
             self.ring.from_i64(0)
         } else {
-            self.coef[0].clone()
+            self.coef.last().unwrap().clone()
         }
     }
 
     pub fn divmod(&self, other: &Poly<'a>) -> DivState<(Poly<'a>, Poly<'a>)> {
-        let n = self.deg();
-        let m = other.deg();
+        if self.len() == 0 {
+            return DivState::Result((Poly::zero(self.ring), Poly::zero(self.ring)));
+        }
+
+        let n = self.deg() as usize;
+        let m = other.deg() as usize;
 
         let mut r_coef = self.coef.clone();
         let mut q_coef = vec![self.ring.from_i64(0); n - m + 1];
@@ -138,7 +146,7 @@ impl<'a> Poly<'a> {
         for i in (0..=n - m).rev() {
             let q = &r_coef[i + m] * &lc_r_inv;
             q_coef[i] = q.clone();
-            for j in 0..m {
+            for j in 0..=m {
                 r_coef[i + j] = &r_coef[i + j] - &(&q * &other.coef[j]);
             }
         }
@@ -169,6 +177,14 @@ impl<'a> Poly<'a> {
         let mut coef = vec![ring.from_i64(0); n + 1];
         coef[n] = ring.from_i64(1);
         Poly::new(coef, ring)
+    }
+
+    pub fn one(ring: &'a ModRing) -> Poly<'a> {
+        Poly::new(vec![ring.from_i64(1)], ring)
+    }
+
+    pub fn zero(ring: &'a ModRing) -> Poly<'a> {
+        Poly::new(vec![], ring)
     }
 }
 
