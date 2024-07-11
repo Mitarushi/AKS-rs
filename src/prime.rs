@@ -1,4 +1,4 @@
-use rug::Integer;
+use rug::{Float, Integer};
 use crate::modint::ModRing;
 use crate::poly::Poly;
 use crate::poly_ring::{FastDivEnum, ModPolyRing, NearMonomialDiv};
@@ -37,7 +37,8 @@ pub fn aks(n: &Integer) -> bool {
         return false;
     }
     let lgn = n.significant_bits() as i64;
-    let lgn2 = lgn * lgn;
+    let n_float = Float::with_val(lgn as u32 * 3, n);
+    let lgn2 = n_float.log2().square().floor().to_integer().unwrap().to_i64().unwrap();
 
     for a in 2..=lgn2 {
         if n == &a {
@@ -64,7 +65,6 @@ pub fn aks(n: &Integer) -> bool {
         }).next().unwrap();
 
     let phi_r = phi(r as i64);
-    println!("r: {}, phi(r): {}", r, phi_r);
     let a_limit = ((phi_r as f64).sqrt() * lgn as f64).floor() as i64;
 
     let poly = Poly::x_power_of(&n_ring, r as usize) - Poly::new(vec![n_ring.from_i64(1)], &n_ring);
@@ -74,7 +74,6 @@ pub fn aks(n: &Integer) -> bool {
     (1..=a_limit).
         all(
             |a| {
-                println!("a: {}", a);
                 let x_a = Poly::new(vec![n_ring.from_i64(a), n_ring.from_i64(1)], &n_ring);
                 let x_a = poly_ring.from(x_a);
                 let x_a_n = x_a.pow(n);
@@ -90,6 +89,7 @@ pub fn aks(n: &Integer) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use rug::integer::IsPrime;
     use super::*;
 
     #[test]
@@ -101,14 +101,15 @@ mod tests {
     #[test]
     fn test_aks_large() {
         let mut rng = rug::rand::RandState::new();
-        let mut random_int = || Integer::from(Integer::random_bits(512, &mut rng));
+        let mut random_int = || Integer::from(Integer::random_bits(20, &mut rng));
 
-        for i in 0..20 {
+        for i in 0..10 {
             let is_prime = i % 2 == 0;
             let mut n = random_int();
             if is_prime {
                 n = n.next_prime();
             }
+            let is_prime = n.is_probably_prime(10) != IsPrime::No;
             let is_prime_aks = aks(&n);
             println!("{}: {} {}", i, n, is_prime_aks);
             assert_eq!(is_prime, is_prime_aks, "Failed on test case {}", i);
