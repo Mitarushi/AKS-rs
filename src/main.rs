@@ -2,12 +2,12 @@
 
 use rug::Integer;
 
-use crate::prime::aks;
+use crate::aks::aks;
 
 mod modint;
 mod poly;
 mod poly_ring;
-mod prime;
+mod aks;
 mod poly_elem_trait;
 
 fn main() {
