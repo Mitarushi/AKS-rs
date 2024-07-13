@@ -5,7 +5,7 @@ use rug::Integer;
 
 use overload_macros::{overload, overload_eq, overload_unary};
 
-use crate::modint::{DivState, ModInt, ModRing};
+use crate::modint::{DivError, ModInt, ModRing};
 use crate::poly_elem_trait::{PolyElem, PolyElemRing};
 
 #[derive(Clone, Debug)]
@@ -127,9 +127,9 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         }
     }
 
-    pub fn divmod(&self, other: &Poly<'a, T>) -> DivState<(Poly<'a, T>, Poly<'a, T>)> {
+    pub fn divmod(&self, other: &Poly<'a, T>) -> Result<(Poly<'a, T>, Poly<'a, T>), DivError> {
         if self.len() < other.len() {
-            return DivState::Result((Poly::zero(self.ring), self.clone()));
+            return Ok((Poly::zero(self.ring), self.clone()));
         }
 
         let n = self.deg() as usize;
@@ -138,13 +138,7 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         let mut r_coef = self.coef.clone();
         let mut q_coef = vec![self.ring.zero(); n - m + 1];
 
-        let lc_r_inv = other.lc().inv();
-        match lc_r_inv {
-            DivState::Error => return DivState::Error,
-            DivState::DivisorFound(x) => return DivState::DivisorFound(x),
-            _ => {}
-        }
-        let lc_r_inv = lc_r_inv.unwrap();
+        let lc_r_inv = other.lc().inv()?;
 
         for i in (0..=n - m).rev() {
             let q = &r_coef[i + m] * &lc_r_inv;
@@ -157,23 +151,17 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         let q = Poly::new(q_coef, self.ring);
         Poly::reduce(&mut r_coef);
         let r = Poly::new(r_coef, self.ring);
-        DivState::Result((q, r))
+        Ok((q, r))
     }
 
-    fn div_(&self, other: &Poly<'a, T>) -> DivState<Poly<'a, T>> {
-        match self.divmod(other) {
-            DivState::Error => DivState::Error,
-            DivState::DivisorFound(x) => DivState::DivisorFound(x),
-            DivState::Result((q, _)) => DivState::Result(q),
-        }
+    fn div_(&self, other: &Poly<'a, T>) -> Result<Poly<'a, T>, DivError> {
+        let (q, _) = self.divmod(other)?;
+        Ok(q)
     }
 
-    fn rem_(&self, other: &Poly<'a, T>) -> DivState<Poly<'a, T>> {
-        match self.divmod(other) {
-            DivState::Error => DivState::Error,
-            DivState::DivisorFound(x) => DivState::DivisorFound(x),
-            DivState::Result((_, r)) => DivState::Result(r),
-        }
+    fn rem_(&self, other: &Poly<'a, T>) -> Result<Poly<'a, T>, DivError> {
+        let (_, r) = self.divmod(other)?;
+        Ok(r)
     }
 
     fn eq_(&self, other: &Poly<'a, T>) -> bool {
@@ -212,8 +200,8 @@ overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, i64, mul, mul_i64);
 overload_unary!(<'a, T: PolyElem<'a>>, Neg, Poly<'a, T>, neg, neg_);
 overload!(<'a, T: PolyElem<'a>>, Shl, Poly<'a, T>, usize, shl, shl_);
 overload!(<'a, T: PolyElem<'a>>, Shr, Poly<'a, T>, usize, shr, shr_);
-overload!(<'a, T: PolyElem<'a>>, Div, Poly<'a, T>, Poly<'a, T>, DivState<Poly<'a, T>>, div, div_);
-overload!(<'a, T: PolyElem<'a>>, Rem, Poly<'a, T>, Poly<'a, T>, DivState<Poly<'a, T>>, rem, rem_);
+overload!(<'a, T: PolyElem<'a>>, Div, Poly<'a, T>, Poly<'a, T>, Result<Poly<'a, T>, DivError>, div, div_);
+overload!(<'a, T: PolyElem<'a>>, Rem, Poly<'a, T>, Poly<'a, T>, Result<Poly<'a, T>, DivError>, rem, rem_);
 overload_eq!(<'a, T: PolyElem<'a>>, PartialEq, Poly<'a, T>, eq, eq_);
 
 impl<'a, T: PolyElem<'a>> Index<usize> for Poly<'a, T> {

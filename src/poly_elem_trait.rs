@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::ops::{Add, Mul, Neg, Sub};
 
-use crate::modint::DivState;
+use crate::modint::DivError;
 
 pub trait Ops<Rhs = Self, Output = Self>: Sized + Add<Rhs, Output=Output> + Sub<Rhs, Output=Output> + Mul<Rhs, Output=Output> + Neg<Output=Output> {}
 
@@ -28,5 +28,5 @@ pub trait PolyElem<'a>: RefOps + RefOps<i64> + Debug + Clone + PartialEq {
 
     fn from_digits(ring: &'a Self::Ring, digits: &[u64]) -> Self;
 
-    fn inv(&self) -> DivState<Self>;
+    fn inv(&self) -> Result<Self, DivError>;
 }

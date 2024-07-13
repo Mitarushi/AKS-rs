@@ -84,19 +84,10 @@ pub struct ModInt<'a> {
     pub ring: &'a ModRing,
 }
 
-pub enum DivState<T> {
+#[derive(Clone, Debug)]
+pub enum DivError {
     Error,
-    Result(T),
     DivisorFound(Integer),
-}
-
-impl<T> DivState<T> {
-    pub fn unwrap(self) -> T {
-        match self {
-            DivState::Result(x) => x,
-            _ => panic!("DivState::unwrap()"),
-        }
-    }
 }
 
 impl ModRing {
@@ -221,7 +212,7 @@ impl<'a> ModInt<'a> {
         self.value.is_zero()
     }
 
-    pub fn inv(&self) -> DivState<ModInt<'a>> {
+    pub fn inv(&self) -> Result<ModInt<'a>, DivError> {
         let a = &self.value;
         let b = &self.ring.modulo;
         let mut g = Integer::new();
@@ -229,11 +220,11 @@ impl<'a> ModInt<'a> {
         (&mut g, &mut x).assign(a.extended_gcd_ref(b));
 
         if &g == b {
-            DivState::Error
+            Err(DivError::Error)
         } else if g == 1 {
-            DivState::Result(self.ring.from_bounded(x))
+            Ok(self.ring.from_bounded(x))
         } else {
-            DivState::DivisorFound(g)
+            Err(DivError::DivisorFound(g))
         }
     }
 }
@@ -255,7 +246,7 @@ impl<'a> PolyElem<'a> for ModInt<'a> {
         ring.from(value)
     }
 
-    fn inv(&self) -> DivState<ModInt<'a>> {
+    fn inv(&self) -> Result<ModInt<'a>, DivError> {
         self.inv()
     }
 }
