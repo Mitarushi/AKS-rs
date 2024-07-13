@@ -109,6 +109,25 @@ impl<'a, T: PolyElem<'a>> FastPolyDivTrait<'a, T> for NearMonomialDiv<T> {
 }
 
 #[derive(Clone, Debug)]
+pub struct NaivePolyDiv<'a, T: PolyElem<'a>> {
+    modulo: Poly<'a, T>,
+}
+
+impl<'a, T: PolyElem<'a>> NaivePolyDiv<'a, T> {
+    pub fn new(modulo: Poly<'a, T>) -> Self {
+        NaivePolyDiv {
+            modulo,
+        }
+    }
+}
+
+impl<'a, T: PolyElem<'a>> FastPolyDivTrait<'a, T> for NaivePolyDiv<'a, T> {
+    fn rem(&mut self, x: &Poly<'a, T>) -> Poly<'a, T> {
+        (x % &self.modulo).unwrap()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ModPolyRing<'a, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> {
     pub modulo: Poly<'a, T>,
     fast_div: RefCell<U>,
