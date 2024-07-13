@@ -1,28 +1,22 @@
 use std::cmp::{max, min};
 use std::ops::{Add, Div, Index, IndexMut, Mul, Neg, Rem, Shl, Shr, Sub};
+
 use rug::Integer;
+
+use overload_macros::{overload, overload_eq, overload_unary};
+
 use crate::modint::{DivState, ModInt, ModRing};
-use crate::{overload, overload_eq, overload_unary};
+use crate::poly_elem_trait::{PolyElem, PolyElemRing};
 
 #[derive(Clone, Debug)]
-pub struct Poly<'a> {
-    pub coef: Vec<ModInt<'a>>,
-    pub ring: &'a ModRing,
+pub struct Poly<'a, T: PolyElem<'a>> {
+    pub coef: Vec<T>,
+    pub ring: &'a T::Ring,
 }
 
-fn significant_bits(x: u64) -> u32 {
-    64 - x.leading_zeros()
-}
-
-impl<'a> Poly<'a> {
-    pub fn new(coef: Vec<ModInt<'a>>, ring: &'a ModRing) -> Poly<'a> {
+impl<'a, T: PolyElem<'a>> Poly<'a, T> {
+    pub fn new(coef: Vec<T>, ring: &'a T::Ring) -> Poly<'a, T> {
         Poly { coef, ring }
-    }
-
-    pub fn from_int_vec(coef: Vec<Integer>, ring: &'a ModRing) -> Poly<'a> {
-        let mut coef = coef.into_iter().map(|x| ring.from(x)).collect();
-        Poly::reduce(&mut coef);
-        Poly::new(coef, ring)
     }
 
     pub fn len(&self) -> usize {
@@ -33,15 +27,15 @@ impl<'a> Poly<'a> {
         self.coef.len() as isize - 1
     }
 
-    pub fn reduce(coef: &mut Vec<ModInt<'a>>) {
+    pub fn reduce(coef: &mut Vec<T>) {
         while coef.len() > 0 && coef.last().unwrap().is_zero() {
             coef.pop();
         }
     }
 
-    fn add_(&self, other: &Poly<'a>) -> Poly<'a> {
+    fn add_(&self, other: &Poly<'a, T>) -> Poly<'a, T> {
         let length = max(self.len(), other.len());
-        let mut coef = vec![self.ring.from_i64(0); length];
+        let mut coef = vec![self.ring.zero(); length];
         for (i, x) in self.coef.iter().enumerate() {
             coef[i] = x.clone();
         }
@@ -52,9 +46,9 @@ impl<'a> Poly<'a> {
         Poly::new(coef, self.ring)
     }
 
-    fn sub_(&self, other: &Poly<'a>) -> Poly<'a> {
+    fn sub_(&self, other: &Poly<'a, T>) -> Poly<'a, T> {
         let length = max(self.len(), other.len());
-        let mut coef = vec![self.ring.from_i64(0); length];
+        let mut coef = vec![self.ring.zero(); length];
         for (i, x) in self.coef.iter().enumerate() {
             coef[i] = x.clone();
         }
@@ -70,26 +64,25 @@ impl<'a> Poly<'a> {
         for (i, x) in self.coef.iter().enumerate() {
             let idx_from = i * step as usize;
             let idx_to = idx_from + step as usize;
-            x.value.write_digits::<u64>(&mut bit[idx_from..idx_to], rug::integer::Order::LsfLe);
+            x.write_digits(&mut bit[idx_from..idx_to]);
         }
         Integer::from_digits(&bit, rug::integer::Order::LsfLe)
     }
 
-    fn from_single_integer(value: Integer, ring: &'a ModRing, step: u32) -> Poly<'a> {
+    fn from_single_integer(value: Integer, ring: &'a T::Ring, step: u32) -> Poly<'a, T> {
         let bit = value.to_digits::<u64>(rug::integer::Order::LsfLe);
         let mut coef = Vec::new();
         coef.reserve(bit.len() / step as usize + 1);
         for from_idx in (0..bit.len()).step_by(step as usize) {
             let to_idx = min(from_idx + step as usize, bit.len());
-            let x = Integer::from_digits(&bit[from_idx..to_idx], rug::integer::Order::LsfLe);
-            coef.push(ring.from(x));
+            coef.push(T::from_digits(ring, &bit[from_idx..to_idx]));
         }
         Poly::new(coef, ring)
     }
 
-    fn mul_(&self, other: &Poly) -> Poly<'a> {
+    fn mul_(&self, other: &Poly<'a, T>) -> Poly<'a, T> {
         let min_len = min(self.len(), other.len());
-        let required_bits = self.ring.modulo.significant_bits() * 2 + significant_bits(min_len as u64);
+        let required_bits = self.ring.mul_required_bits(min_len);
         let step = (required_bits + 63) / 64;
         let a = self.to_single_integer(step);
         let b = other.to_single_integer(step);
@@ -97,17 +90,17 @@ impl<'a> Poly<'a> {
         Poly::from_single_integer(c, self.ring, step)
     }
 
-    fn mul_modint(&self, other: &ModInt<'a>) -> Poly<'a> {
+    fn mul_elem(&self, other: &T) -> Poly<'a, T> {
         let mut coef = self.coef.iter().map(|x| x * other).collect();
         Poly::reduce(&mut coef);
         Poly::new(coef, self.ring)
     }
 
-    fn mul_i64(&self, other: &i64) -> Poly<'a> {
-        self.mul_modint(&self.ring.from_i64(*other))
+    fn mul_i64(&self, other: &i64) -> Poly<'a, T> {
+        self.mul_elem(&self.ring.from_i64(*other))
     }
 
-    fn neg_(&self) -> Poly<'a> {
+    fn neg_(&self) -> Poly<'a, T> {
         let coef = self.coef.iter().map(|x| -x).collect();
         Poly {
             coef,
@@ -115,26 +108,26 @@ impl<'a> Poly<'a> {
         }
     }
 
-    fn shl_(&self, shift: &usize) -> Poly<'a> {
-        let mut coef = vec![self.ring.from_i64(0); *shift];
+    fn shl_(&self, shift: &usize) -> Poly<'a, T> {
+        let mut coef = vec![self.ring.zero(); *shift];
         coef.extend(self.coef.iter().cloned());
         Poly::new(coef, self.ring)
     }
 
-    fn shr_(&self, shift: &usize) -> Poly<'a> {
+    fn shr_(&self, shift: &usize) -> Poly<'a, T> {
         let coef = self.coef[min(*shift, self.len())..].to_vec();
         Poly::new(coef, self.ring)
     }
 
-    pub fn lc(&self) -> ModInt<'a> {
+    pub fn lc(&self) -> T {
         if self.coef.len() == 0 {
-            self.ring.from_i64(0)
+            self.ring.zero()
         } else {
             self.coef.last().unwrap().clone()
         }
     }
 
-    pub fn divmod(&self, other: &Poly<'a>) -> DivState<(Poly<'a>, Poly<'a>)> {
+    pub fn divmod(&self, other: &Poly<'a, T>) -> DivState<(Poly<'a, T>, Poly<'a, T>)> {
         if self.len() < other.len() {
             return DivState::Result((Poly::zero(self.ring), self.clone()));
         }
@@ -143,7 +136,7 @@ impl<'a> Poly<'a> {
         let m = other.deg() as usize;
 
         let mut r_coef = self.coef.clone();
-        let mut q_coef = vec![self.ring.from_i64(0); n - m + 1];
+        let mut q_coef = vec![self.ring.zero(); n - m + 1];
 
         let lc_r_inv = other.lc().inv();
         match lc_r_inv {
@@ -167,7 +160,7 @@ impl<'a> Poly<'a> {
         DivState::Result((q, r))
     }
 
-    fn div_(&self, other: &Poly<'a>) -> DivState<Poly<'a>> {
+    fn div_(&self, other: &Poly<'a, T>) -> DivState<Poly<'a, T>> {
         match self.divmod(other) {
             DivState::Error => DivState::Error,
             DivState::DivisorFound(x) => DivState::DivisorFound(x),
@@ -175,7 +168,7 @@ impl<'a> Poly<'a> {
         }
     }
 
-    fn rem_(&self, other: &Poly<'a>) -> DivState<Poly<'a>> {
+    fn rem_(&self, other: &Poly<'a, T>) -> DivState<Poly<'a, T>> {
         match self.divmod(other) {
             DivState::Error => DivState::Error,
             DivState::DivisorFound(x) => DivState::DivisorFound(x),
@@ -183,49 +176,58 @@ impl<'a> Poly<'a> {
         }
     }
 
-    fn eq_(&self, other: &Poly<'a>) -> bool {
+    fn eq_(&self, other: &Poly<'a, T>) -> bool {
         self.coef == other.coef
     }
 
-    pub fn x_power_of(ring: &'a ModRing, n: usize) -> Poly<'a> {
-        let mut coef = vec![ring.from_i64(0); n + 1];
-        coef[n] = ring.from_i64(1);
+    pub fn x_power_of(ring: &'a T::Ring, n: usize) -> Poly<'a, T> {
+        let mut coef = vec![ring.zero(); n + 1];
+        coef[n] = ring.one();
         Poly::new(coef, ring)
     }
 
-    pub fn one(ring: &'a ModRing) -> Poly<'a> {
-        Poly::new(vec![ring.from_i64(1)], ring)
+    pub fn one(ring: &'a T::Ring) -> Poly<'a, T> {
+        Poly::new(vec![ring.one()], ring)
     }
 
-    pub fn zero(ring: &'a ModRing) -> Poly<'a> {
+    pub fn zero(ring: &'a T::Ring) -> Poly<'a, T> {
         Poly::new(vec![], ring)
     }
 }
 
-overload!('a, Add, Poly<'a>, add, add_);
-overload!('a, Sub, Poly<'a>, sub, sub_);
-overload!('a, Mul, Poly<'a>, mul, mul_);
-overload!('a, Mul, Poly<'a>, ModInt<'a>, mul, mul_modint);
-overload!('a, Mul, Poly<'a>, i64, mul, mul_i64);
-overload_unary!('a, Neg, Poly<'a>, neg, neg_);
-overload!('a, Shl, Poly<'a>, usize, shl, shl_);
-overload!('a, Shr, Poly<'a>, usize, shr, shr_);
-overload!('a, Div, Poly<'a>, Poly<'a>, DivState<Poly<'a>>, div, div_);
-overload!('a, Rem, Poly<'a>, Poly<'a>, DivState<Poly<'a>>, rem, rem_);
-overload_eq!('a, PartialEq, Poly<'a>, eq, eq_);
+impl<'a> Poly<'a, ModInt<'a>> {
+    pub fn from_int_vec(coef: Vec<Integer>, ring: &'a ModRing) -> Poly<'a, ModInt<'_>> {
+        let mut coef = coef.into_iter().map(|x| ring.from(x)).collect();
+        Poly::reduce(&mut coef);
+        Poly::new(coef, ring)
+    }
+}
 
-impl<'a> Index<usize> for Poly<'a> {
-    type Output = ModInt<'a>;
 
-    fn index(&self, index: usize) -> &ModInt<'a> {
+overload!(<'a, T: PolyElem<'a>>, Add, Poly<'a, T>, add, add_);
+overload!(<'a, T: PolyElem<'a>>, Sub, Poly<'a, T>, sub, sub_);
+overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, mul, mul_);
+overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, T, mul, mul_elem);
+overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, i64, mul, mul_i64);
+overload_unary!(<'a, T: PolyElem<'a>>, Neg, Poly<'a, T>, neg, neg_);
+overload!(<'a, T: PolyElem<'a>>, Shl, Poly<'a, T>, usize, shl, shl_);
+overload!(<'a, T: PolyElem<'a>>, Shr, Poly<'a, T>, usize, shr, shr_);
+overload!(<'a, T: PolyElem<'a>>, Div, Poly<'a, T>, Poly<'a, T>, DivState<Poly<'a, T>>, div, div_);
+overload!(<'a, T: PolyElem<'a>>, Rem, Poly<'a, T>, Poly<'a, T>, DivState<Poly<'a, T>>, rem, rem_);
+overload_eq!(<'a, T: PolyElem<'a>>, PartialEq, Poly<'a, T>, eq, eq_);
+
+impl<'a, T: PolyElem<'a>> Index<usize> for Poly<'a, T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &T {
         &self.coef[index]
     }
 }
 
-impl<'a> IndexMut<usize> for Poly<'a> {
-    fn index_mut(&mut self, index: usize) -> &mut ModInt<'a> {
+impl<'a, T: PolyElem<'a>> IndexMut<usize> for Poly<'a, T> {
+    fn index_mut(&mut self, index: usize) -> &mut T {
         if index >= self.coef.len() {
-            self.coef.resize(index + 1, self.ring.from_i64(0));
+            self.coef.resize(index + 1, self.ring.zero());
         }
         &mut self.coef[index]
     }
@@ -233,8 +235,9 @@ impl<'a> IndexMut<usize> for Poly<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rug::{Integer, rand};
+
+    use super::*;
 
     #[test]
     fn test_poly() {

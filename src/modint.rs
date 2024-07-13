@@ -1,8 +1,13 @@
 use std::cell::RefCell;
-use rug::{Assign, Integer};
 use std::fmt::{Debug, Display};
-use std::ops::{Add, Neg, Mul, Sub};
-use crate::{overload, overload_eq, overload_unary};
+use std::ops::{Add, Mul, Neg, Sub};
+
+use rug::{Assign, Integer};
+use rug::integer::Order;
+
+use overload_macros::{overload, overload_eq, overload_unary};
+
+use crate::poly_elem_trait::{PolyElem, PolyElemRing};
 
 #[derive(Debug, Clone)]
 struct FastDiv {
@@ -144,19 +149,64 @@ impl ModRing {
         };
         self.from_bounded(value)
     }
+
+    pub fn zero(&self) -> ModInt {
+        self.from_bounded(Integer::from(0))
+    }
+
+    pub fn one(&self) -> ModInt {
+        self.from_bounded(Integer::from(1))
+    }
 }
+
+fn significant_bits(x: u64) -> u32 {
+    64 - x.leading_zeros()
+}
+
+impl<'a> PolyElemRing<'a> for ModRing {
+    type Elem = ModInt<'a>;
+
+    fn zero(&'a self) -> Self::Elem {
+        self.zero()
+    }
+
+    fn one(&'a self) -> Self::Elem {
+        self.one()
+    }
+
+    fn from_i64(&'a self, x: i64) -> Self::Elem {
+        self.from_i64(x)
+    }
+
+    fn mul_required_bits(&self, len: usize) -> u32 {
+        self.modulo.significant_bits() * 2 + significant_bits(len as u64)
+    }
+}
+
 
 impl<'a> ModInt<'a> {
     fn add_(&self, other: &ModInt<'a>) -> ModInt<'a> {
         self.ring.add(self, other)
     }
 
+    fn add_i64(&self, other: &i64) -> ModInt<'a> {
+        self.add_(&self.ring.from_i64(*other))
+    }
+
     fn sub_(&self, other: &ModInt<'a>) -> ModInt<'a> {
         self.ring.sub(self, other)
     }
 
+    fn sub_i64(&self, other: &i64) -> ModInt<'a> {
+        self.sub_(&self.ring.from_i64(*other))
+    }
+
     fn mul_(&self, other: &ModInt<'a>) -> ModInt<'a> {
         self.ring.mul(self, other)
+    }
+
+    fn mul_i64(&self, other: &i64) -> ModInt<'a> {
+        self.mul_(&self.ring.from_i64(*other))
     }
 
     fn neg_(&self) -> ModInt<'a> {
@@ -188,11 +238,36 @@ impl<'a> ModInt<'a> {
     }
 }
 
-overload!('a, Add, ModInt<'a>, add, add_);
-overload!('a, Sub, ModInt<'a>, sub, sub_);
-overload!('a, Mul, ModInt<'a>, mul, mul_);
-overload_unary!('a, Neg, ModInt<'a>, neg, neg_);
-overload_eq!('a, PartialEq, ModInt<'a>, eq, eq_);
+impl<'a> PolyElem<'a> for ModInt<'a> {
+    type Ring = ModRing;
+
+    fn is_zero(&self) -> bool {
+        self.is_zero()
+    }
+
+    fn write_digits(&self, digits: &mut [u64]) {
+        self.value.write_digits(digits, Order::LsfLe);
+    }
+
+    fn from_digits(ring: &'a Self::Ring, digits: &[u64]) -> ModInt<'a> {
+        let mut value = Integer::new();
+        value.assign_digits(digits, Order::LsfLe);
+        ring.from(value)
+    }
+
+    fn inv(&self) -> DivState<ModInt<'a>> {
+        self.inv()
+    }
+}
+
+overload!(<'a>, Add, ModInt<'a>, add, add_);
+overload!(<'a>, Add, ModInt<'a>, i64, add, add_i64);
+overload!(<'a>, Sub, ModInt<'a>, sub, sub_);
+overload!(<'a>, Sub, ModInt<'a>, i64, sub, sub_i64);
+overload!(<'a>, Mul, ModInt<'a>, mul, mul_);
+overload!(<'a>, Mul, ModInt<'a>, i64, mul, mul_i64);
+overload_unary!(<'a>, Neg, ModInt<'a>, neg, neg_);
+overload_eq!(<'a>, PartialEq, ModInt<'a>, eq, eq_);
 
 impl<'a> Display for ModInt<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -209,6 +284,7 @@ impl<'a> Debug for ModInt<'a> {
 #[cfg(test)]
 mod tests {
     use rug::{Complete, rand};
+
     use super::*;
 
     #[test]

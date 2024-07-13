@@ -1,7 +1,8 @@
 use rug::{Float, Integer};
+
 use crate::modint::ModRing;
 use crate::poly::Poly;
-use crate::poly_ring::{FastDivEnum, ModPolyRing, NearMonomialDiv};
+use crate::poly_ring::{ModPolyRing, NearMonomialDiv};
 
 fn factor(n: i64) -> Vec<i64> {
     let mut n = n;
@@ -67,8 +68,8 @@ pub fn aks(n: &Integer) -> bool {
     let phi_r = phi(r as i64);
     let a_limit = ((phi_r as f64).sqrt() * lgn as f64).floor() as i64;
 
-    let poly = Poly::x_power_of(&n_ring, r as usize) - Poly::new(vec![n_ring.from_i64(1)], &n_ring);
-    let fast_div = FastDivEnum::NearMonomial(NearMonomialDiv::new(r as usize, n_ring.from_i64(1)));
+    let poly = Poly::x_power_of(&n_ring, r as usize) - Poly::new(vec![n_ring.one()], &n_ring);
+    let fast_div = NearMonomialDiv::new(r as usize, n_ring.one());
     let poly_ring = ModPolyRing::from_fast_div(poly, fast_div);
 
     (1..=a_limit).
@@ -90,6 +91,7 @@ pub fn aks(n: &Integer) -> bool {
 #[cfg(test)]
 mod tests {
     use rug::integer::IsPrime;
+
     use super::*;
 
     #[test]
