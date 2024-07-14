@@ -358,7 +358,7 @@ mod tests {
             let n = random_int(&mut rng).next_prime();
             let n_ring = ModRing::new(n.clone());
 
-            let modulo = random_poly(&mut rng, 127, &n_ring) + Poly::x_power_of(&n_ring, 128);
+            let modulo = random_poly(&mut rng, 127, &n_ring);
             let ring = ModPolyRing::new(modulo.clone());
 
             let a = random_int(&mut rng);
@@ -372,8 +372,6 @@ mod tests {
             let x_pow_a = &x_pow + &ring.from_bounded(Poly::from_int_vec(vec![a.clone()], &n_ring));
 
             assert_eq!(x_a_pow.value, x_pow_a.value);
-
-            println!("ok");
         }
     }
 
@@ -386,10 +384,10 @@ mod tests {
             let n_ring = ModRing::new(n.clone());
 
             let mod_deg = 5;
-            let mod_poly = random_poly(&mut rng, mod_deg - 1, &n_ring) + Poly::x_power_of(&n_ring, mod_deg);
+            let mod_poly = random_poly(&mut rng, mod_deg - 1, &n_ring);
             let mod_poly_ring = ModPolyRing::new(mod_poly);
 
-            let poly_deg = 128;
+            let poly_deg = 256;
             let poly_a_coef = (0..=poly_deg).map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring))).collect();
             let poly_a = Poly::new(poly_a_coef, &mod_poly_ring);
             let poly_b_coef = (0..=poly_deg).map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring))).collect();

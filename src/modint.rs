@@ -223,6 +223,10 @@ impl<'a> ModInt<'a> {
         let mut x = Integer::new();
         (&mut g, &mut x).assign(a.extended_gcd_ref(b));
 
+        if x < 0 {
+            x += b;
+        }
+
         if &g == b {
             Err(DivError::Error)
         } else if g == 1 {
