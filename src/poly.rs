@@ -149,9 +149,13 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         }
     }
 
-    pub fn divmod(&self, other: &Poly<'a, T>) -> Result<(Poly<'a, T>, Poly<'a, T>), DivError> {
+    pub fn divmod_with_lc_inv(
+        &self,
+        other: &Poly<'a, T>,
+        lc_inv: &T,
+    ) -> (Poly<'a, T>, Poly<'a, T>) {
         if self.len() < other.len() {
-            return Ok((Poly::zero(self.ring), self.clone()));
+            return (Poly::zero(self.ring), self.clone());
         }
 
         let n = self.deg() as usize;
@@ -160,10 +164,8 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         let mut r_coef = self.coef.clone();
         let mut q_coef = vec![self.ring.zero(); n - m + 1];
 
-        let lc_r_inv = other.lc().inv()?;
-
         for i in (0..=n - m).rev() {
-            let q = &r_coef[i + m] * &lc_r_inv;
+            let q = &r_coef[i + m] * lc_inv;
             q_coef[i] = q.clone();
             for j in 0..=m {
                 r_coef[i + j] = &r_coef[i + j] - &(&q * &other.coef[j]);
@@ -173,7 +175,12 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         let q = Poly::new(q_coef, self.ring);
         Poly::reduce(&mut r_coef);
         let r = Poly::new(r_coef, self.ring);
-        Ok((q, r))
+        (q, r)
+    }
+
+    pub fn divmod(&self, other: &Poly<'a, T>) -> Result<(Poly<'a, T>, Poly<'a, T>), DivError> {
+        let lc_inv = other.lc().inv()?;
+        Ok(self.divmod_with_lc_inv(other, &lc_inv))
     }
 
     fn div_(&self, other: &Poly<'a, T>) -> Result<Poly<'a, T>, DivError> {

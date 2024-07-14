@@ -108,17 +108,19 @@ impl<'a, T: PolyElem<'a>> FastPolyDivTrait<'a, T> for NearMonomialDiv<T> {
 #[derive(Clone, Debug)]
 pub struct NaivePolyDiv<'a, T: PolyElem<'a>> {
     modulo: Poly<'a, T>,
+    lc_inv: T,
 }
 
 impl<'a, T: PolyElem<'a>> NaivePolyDiv<'a, T> {
     pub fn new(modulo: Poly<'a, T>) -> Self {
-        NaivePolyDiv { modulo }
+        let lc_inv = modulo.lc().inv().unwrap();
+        NaivePolyDiv { modulo, lc_inv }
     }
 }
 
 impl<'a, T: PolyElem<'a>> FastPolyDivTrait<'a, T> for NaivePolyDiv<'a, T> {
     fn rem(&mut self, x: &Poly<'a, T>) -> Poly<'a, T> {
-        (x % &self.modulo).unwrap()
+        x.divmod_with_lc_inv(&self.modulo, &self.lc_inv).1
     }
 }
 
@@ -335,9 +337,9 @@ impl<'b, 'a: 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> PolyElem<'b>
 
 #[cfg(test)]
 mod tests {
-    use rug::Integer;
-    use rug::rand::RandState;
     use crate::modint::{ModInt, ModRing};
+    use rug::rand::RandState;
+    use rug::Integer;
 
     use super::*;
 
@@ -346,7 +348,9 @@ mod tests {
     }
 
     fn random_poly<'a>(rng: &mut RandState, d: usize, n_ring: &'a ModRing) -> Poly<'a, ModInt<'a>> {
-        let coef = (0..=d).map(|_| n_ring.from(random_int(rng))).collect::<Vec<_>>();
+        let coef = (0..=d)
+            .map(|_| n_ring.from(random_int(rng)))
+            .collect::<Vec<_>>();
         Poly::new(coef, n_ring)
     }
 
@@ -388,9 +392,13 @@ mod tests {
             let mod_poly_ring = ModPolyRing::new(mod_poly);
 
             let poly_deg = 256;
-            let poly_a_coef = (0..=poly_deg).map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring))).collect();
+            let poly_a_coef = (0..=poly_deg)
+                .map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring)))
+                .collect();
             let poly_a = Poly::new(poly_a_coef, &mod_poly_ring);
-            let poly_b_coef = (0..=poly_deg).map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring))).collect();
+            let poly_b_coef = (0..=poly_deg)
+                .map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring)))
+                .collect();
             let poly_b = Poly::new(poly_b_coef, &mod_poly_ring);
 
             let poly_c_coef = (&poly_a * &poly_b).coef;
