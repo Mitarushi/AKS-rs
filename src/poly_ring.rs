@@ -362,7 +362,7 @@ mod tests {
             let n = random_int(&mut rng).next_prime();
             let n_ring = ModRing::new(n.clone());
 
-            let modulo = random_poly(&mut rng, 127, &n_ring);
+            let modulo = random_poly(&mut rng, 128, &n_ring);
             let ring = ModPolyRing::new(modulo.clone());
 
             let a = random_int(&mut rng);
@@ -388,7 +388,7 @@ mod tests {
             let n_ring = ModRing::new(n.clone());
 
             let mod_deg = 5;
-            let mod_poly = random_poly(&mut rng, mod_deg - 1, &n_ring);
+            let mod_poly = random_poly(&mut rng, mod_deg, &n_ring);
             let mod_poly_ring = ModPolyRing::new(mod_poly);
 
             let poly_deg = 256;
