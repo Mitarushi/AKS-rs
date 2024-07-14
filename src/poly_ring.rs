@@ -1,16 +1,18 @@
 use std::cell::RefCell;
 use std::cmp::{max, min};
+use std::fmt::Debug;
 use std::ops::{Add, Mul, Neg, Sub};
 
-use rug::Integer;
 use rug::integer::Order;
+use rug::Integer;
 
 use overload_macros::{overload, overload_eq, overload_unary};
 
+use crate::modint::DivError;
 use crate::poly::Poly;
-use crate::poly_elem_trait::PolyElem;
+use crate::poly_elem_trait::{PolyElem, PolyElemRing};
 
-pub trait FastPolyDivTrait<'a, T: PolyElem<'a>> {
+pub trait FastPolyDivTrait<'a, T: PolyElem<'a>>: Debug + Clone {
     fn rem(&mut self, x: &Poly<'a, T>) -> Poly<'a, T>;
 }
 
@@ -58,14 +60,12 @@ impl<'a, T: PolyElem<'a>> NormalPolyDiv<'a, T> {
 
         let pre_shift = min(x_deg, self.m_len - 1);
         let post_shift = x_deg - pre_shift;
-        let q = &inv * (x >> pre_shift) >> post_shift;
-        q
+        (&inv * (x >> pre_shift)) >> post_shift
     }
 
     pub fn rem_(&mut self, x: &Poly<'a, T>) -> Poly<'a, T> {
         let q = self.div(x);
-        let r = x - &(&q * &self.modulo);
-        r
+        x - &q * &self.modulo
     }
 }
 
@@ -84,10 +84,7 @@ pub struct NearMonomialDiv<T> {
 
 impl<'a, T: PolyElem<'a>> NearMonomialDiv<T> {
     pub fn new(n: usize, a: T) -> Self {
-        NearMonomialDiv {
-            n,
-            a,
-        }
+        NearMonomialDiv { n, a }
     }
 
     pub fn rem_(&self, x: &Poly<'a, T>) -> Poly<'a, T> {
@@ -115,9 +112,7 @@ pub struct NaivePolyDiv<'a, T: PolyElem<'a>> {
 
 impl<'a, T: PolyElem<'a>> NaivePolyDiv<'a, T> {
     pub fn new(modulo: Poly<'a, T>) -> Self {
-        NaivePolyDiv {
-            modulo,
-        }
+        NaivePolyDiv { modulo }
     }
 }
 
@@ -162,21 +157,30 @@ impl<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> ModPolyRing<'a, T, U> 
     }
 
     pub fn from_bounded(&'b self, value: Poly<'a, T>) -> ModPoly<'a, 'b, T, U> {
-        ModPoly {
-            value,
-            ring: self,
-        }
+        ModPoly { value, ring: self }
     }
 
-    pub fn add(&'b self, a: &ModPoly<'a, 'b, T, U>, b: &ModPoly<'a, 'b, T, U>) -> ModPoly<'a, 'b, T, U> {
+    pub fn add(
+        &'b self,
+        a: &ModPoly<'a, 'b, T, U>,
+        b: &ModPoly<'a, 'b, T, U>,
+    ) -> ModPoly<'a, 'b, T, U> {
         self.from_bounded(&a.value + &b.value)
     }
 
-    pub fn sub(&'b self, a: &ModPoly<'a, 'b, T, U>, b: &ModPoly<'a, 'b, T, U>) -> ModPoly<'a, 'b, T, U> {
+    pub fn sub(
+        &'b self,
+        a: &ModPoly<'a, 'b, T, U>,
+        b: &ModPoly<'a, 'b, T, U>,
+    ) -> ModPoly<'a, 'b, T, U> {
         self.from_bounded(&a.value - &b.value)
     }
 
-    pub fn mul(&'b self, a: &ModPoly<'a, 'b, T, U>, b: &ModPoly<'a, 'b, T, U>) -> ModPoly<'a, 'b, T, U> {
+    pub fn mul(
+        &'b self,
+        a: &ModPoly<'a, 'b, T, U>,
+        b: &ModPoly<'a, 'b, T, U>,
+    ) -> ModPoly<'a, 'b, T, U> {
         let r = &a.value * &b.value;
         let r = self.fast_div.borrow_mut().rem(&r);
         self.from_bounded(r)
@@ -192,12 +196,33 @@ impl<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> ModPoly<'a, 'b, T, U> 
         self.ring.add(self, other)
     }
 
+    fn add_i64(&self, other: &i64) -> ModPoly<'a, 'b, T, U> {
+        ModPoly {
+            value: &self.value + other,
+            ring: self.ring,
+        }
+    }
+
     fn sub_(&self, other: &ModPoly<'a, 'b, T, U>) -> ModPoly<'a, 'b, T, U> {
         self.ring.sub(self, other)
     }
 
+    fn sub_i64(&self, other: &i64) -> ModPoly<'a, 'b, T, U> {
+        ModPoly {
+            value: &self.value - other,
+            ring: self.ring,
+        }
+    }
+
     fn mul_(&self, other: &ModPoly<'a, 'b, T, U>) -> ModPoly<'a, 'b, T, U> {
         self.ring.mul(self, other)
+    }
+
+    fn mul_i64(&self, other: &i64) -> ModPoly<'a, 'b, T, U> {
+        ModPoly {
+            value: &self.value * other,
+            ring: self.ring,
+        }
     }
 
     fn neg_(&self) -> ModPoly<'a, 'b, T, U> {
@@ -223,16 +248,94 @@ impl<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> ModPoly<'a, 'b, T, U> 
 }
 
 overload!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Add, ModPoly<'a, 'b, T, U>, add, add_);
+overload!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Add, ModPoly<'a, 'b, T, U>, i64, add, add_i64);
 overload!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Sub, ModPoly<'a, 'b, T, U>, sub, sub_);
+overload!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Sub, ModPoly<'a, 'b, T, U>, i64, sub, sub_i64);
 overload!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Mul, ModPoly<'a, 'b, T, U>, mul, mul_);
+overload!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Mul, ModPoly<'a, 'b, T, U>, i64, mul, mul_i64);
 overload_unary!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, Neg, ModPoly<'a, 'b, T, U>, neg, neg_);
 overload_eq!(<'a, 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>>, PartialEq, ModPoly<'a, 'b, T, U>, eq, eq_);
+
+impl<'b, 'a: 'b, T: PolyElem<'a> + 'b, U: FastPolyDivTrait<'a, T> + 'b> PolyElemRing<'b>
+    for ModPolyRing<'a, T, U>
+{
+    type Elem = ModPoly<'a, 'b, T, U>;
+
+    fn zero(&'b self) -> Self::Elem {
+        self.from_bounded(Poly::zero(self.modulo.ring))
+    }
+
+    fn one(&'b self) -> Self::Elem {
+        self.from_bounded(Poly::one(self.modulo.ring))
+    }
+
+    fn from_i64(&'b self, x: i64) -> Self::Elem {
+        self.from_bounded(Poly::from_int_vec(vec![Integer::from(x)], self.modulo.ring))
+    }
+
+    fn from_integer(&'b self, x: Integer) -> Self::Elem {
+        self.from_bounded(Poly::from_int_vec(vec![x], self.modulo.ring))
+    }
+
+    fn poly_mul_required_words(&self, len: usize) -> usize {
+        let self_len = self.modulo.len() * 2 - 1;
+        let elem_len = len * self_len;
+        self.modulo.ring.poly_mul_required_words(elem_len) * self_len
+    }
+}
+
+impl<'b, 'a: 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> PolyElem<'b>
+    for ModPoly<'a, 'b, T, U>
+{
+    type Ring = ModPolyRing<'a, T, U>;
+
+    fn is_zero(&self) -> bool {
+        self.value.is_zero()
+    }
+
+    fn write_digits(&self, digits: &mut [u64], min_len: usize) {
+        let self_len = self.ring.modulo.len() * 2 - 1;
+        let elem_min_len = min_len * self_len;
+        let elem_size = self.ring.poly_mul_required_words(elem_min_len);
+
+        for (i, x) in self.value.coef.iter().enumerate() {
+            let from_pos = elem_size * i;
+            let to_pos = elem_size * (i + 1);
+            x.write_digits(&mut digits[from_pos..to_pos], elem_min_len);
+        }
+    }
+
+    fn from_digits(ring: &'b Self::Ring, digits: &[u64], min_len: usize) -> Self {
+        let self_len = ring.modulo.len() * 2 - 1;
+        let elem_min_len = min_len * self_len;
+        let elem_size = ring.poly_mul_required_words(elem_min_len);
+
+        let value_coef = (0..self_len)
+            .map(|i| {
+                let from_pos = elem_size * i;
+                let to_pos = elem_size * (i + 1);
+                T::from_digits(ring.modulo.ring, &digits[from_pos..to_pos], elem_min_len)
+            })
+            .collect();
+        let value = Poly::new(value_coef, ring.modulo.ring);
+
+        ring.from(value)
+    }
+
+    fn inv(&self) -> Result<Self, DivError> {
+        if self == &self.ring.one() {
+            Ok(self.ring.one())
+        } else {
+            Err(DivError::Error)
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use rug::Integer;
 
-    use crate::modint::ModRing;
+    use crate::modint::{ModInt, ModRing};
 
     use super::*;
 
@@ -248,7 +351,7 @@ mod tests {
 
             let mut modulo_coef = (0..128).map(|_| random_int()).collect::<Vec<_>>();
             modulo_coef.push(Integer::from(1));
-            let modulo = Poly::from_int_vec(modulo_coef, &n_ring);
+            let modulo = Poly::<ModInt>::from_int_vec(modulo_coef, &n_ring);
             let ring = ModPolyRing::new(modulo.clone());
 
             let a = random_int();

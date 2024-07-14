@@ -39,7 +39,14 @@ pub fn aks(n: &Integer) -> bool {
     }
     let lgn = n.significant_bits() as i64;
     let n_float = Float::with_val(lgn as u32 * 3, n);
-    let lgn2 = n_float.log2().square().floor().to_integer().unwrap().to_i64().unwrap();
+    let lgn2 = n_float
+        .log2()
+        .square()
+        .floor()
+        .to_integer()
+        .unwrap()
+        .to_i64()
+        .unwrap();
 
     for a in 2..=lgn2 {
         if n == &a {
@@ -53,7 +60,7 @@ pub fn aks(n: &Integer) -> bool {
     let n_ring = ModRing::new(n.clone());
 
     let r = (2..)
-        .filter(|r| {
+        .find(|r| {
             let mut i = 1;
             let x = n.mod_u(*r);
             for _ in 0..lgn2 {
@@ -63,7 +70,8 @@ pub fn aks(n: &Integer) -> bool {
                 }
             }
             true
-        }).next().unwrap();
+        })
+        .unwrap();
 
     let phi_r = phi(r as i64);
     let a_limit = ((phi_r as f64).sqrt() * lgn as f64).floor() as i64;
@@ -72,20 +80,18 @@ pub fn aks(n: &Integer) -> bool {
     let fast_div = NearMonomialDiv::new(r as usize, n_ring.one());
     let poly_ring = ModPolyRing::from_fast_div(poly, fast_div);
 
-    (1..=a_limit).
-        all(
-            |a| {
-                let x_a = Poly::new(vec![n_ring.from_i64(a), n_ring.from_i64(1)], &n_ring);
-                let x_a = poly_ring.from(x_a);
-                let x_a_n = x_a.pow(n);
+    (1..=a_limit).all(|a| {
+        let x_a = Poly::new(vec![n_ring.from_i64(a), n_ring.from_i64(1)], &n_ring);
+        let x_a = poly_ring.from(x_a);
+        let x_a_n = x_a.pow(n);
 
-                let x = Poly::x_power_of(&n_ring, 1);
-                let x = poly_ring.from(x);
-                let x_n_a = &x.pow(n) + &poly_ring.from_bounded(Poly::new(vec![n_ring.from_i64(a)], &n_ring));
+        let x = Poly::x_power_of(&n_ring, 1);
+        let x = poly_ring.from(x);
+        let x_n_a =
+            &x.pow(n) + &poly_ring.from_bounded(Poly::new(vec![n_ring.from_i64(a)], &n_ring));
 
-                x_a_n == x_n_a
-            }
-        )
+        x_a_n == x_n_a
+    })
 }
 
 #[cfg(test)]

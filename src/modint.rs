@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Mul, Neg, Sub};
 
-use rug::{Assign, Integer};
 use rug::integer::Order;
+use rug::{Assign, Integer};
 
 use overload_macros::{overload, overload_eq, overload_unary};
 
@@ -57,8 +57,7 @@ impl FastDiv {
         let x_len = x.significant_bits();
         self.double_until(x_len);
         let inv = Integer::from(&self.inv >> (self.b_log - x_len));
-        let q = inv * x >> x_len;
-        q
+        (inv * x) >> x_len
     }
 
     pub fn rem(&mut self, x: &Integer) -> Integer {
@@ -104,10 +103,7 @@ impl ModRing {
     }
 
     pub fn from_bounded(&self, value: Integer) -> ModInt {
-        ModInt {
-            value,
-            ring: self,
-        }
+        ModInt { value, ring: self }
     }
 
     pub fn from_i64(&self, value: i64) -> ModInt {
@@ -116,7 +112,11 @@ impl ModRing {
 
     pub fn add(&self, a: &ModInt, b: &ModInt) -> ModInt {
         let r = Integer::from(&a.value + &b.value);
-        let value = if r >= self.modulo { r - &self.modulo } else { r };
+        let value = if r >= self.modulo {
+            r - &self.modulo
+        } else {
+            r
+        };
         self.from_bounded(value)
     }
 
@@ -169,11 +169,15 @@ impl<'a> PolyElemRing<'a> for ModRing {
         self.from_i64(x)
     }
 
-    fn mul_required_bits(&self, len: usize) -> u32 {
-        self.modulo.significant_bits() * 2 + significant_bits(len as u64)
+    fn from_integer(&'a self, x: Integer) -> Self::Elem {
+        self.from(x)
+    }
+
+    fn poly_mul_required_words(&self, len: usize) -> usize {
+        let bits = self.modulo.significant_bits() * 2 + significant_bits(len as u64);
+        (bits as usize + 63) / 64
     }
 }
-
 
 impl<'a> ModInt<'a> {
     fn add_(&self, other: &ModInt<'a>) -> ModInt<'a> {
@@ -236,11 +240,11 @@ impl<'a> PolyElem<'a> for ModInt<'a> {
         self.is_zero()
     }
 
-    fn write_digits(&self, digits: &mut [u64]) {
+    fn write_digits(&self, digits: &mut [u64], _min_len: usize) {
         self.value.write_digits(digits, Order::LsfLe);
     }
 
-    fn from_digits(ring: &'a Self::Ring, digits: &[u64]) -> ModInt<'a> {
+    fn from_digits(ring: &'a Self::Ring, digits: &[u64], _min_len: usize) -> Self {
         let mut value = Integer::new();
         value.assign_digits(digits, Order::LsfLe);
         ring.from(value)
@@ -274,16 +278,14 @@ impl<'a> Debug for ModInt<'a> {
 
 #[cfg(test)]
 mod tests {
-    use rug::{Complete, rand};
+    use rug::{rand, Complete};
 
     use super::*;
 
     #[test]
     fn test_modint() {
         let mut rng = rand::RandState::new();
-        let mut gen_random = || -> Integer {
-            Integer::from(Integer::random_bits(128, &mut rng))
-        };
+        let mut gen_random = || -> Integer { Integer::from(Integer::random_bits(128, &mut rng)) };
 
         for _ in 0..100 {
             let modulo = gen_random();
@@ -298,7 +300,10 @@ mod tests {
             assert_eq!(c.value, (&a + &b).complete() % &modulo);
 
             let c = &a_mod - &b_mod;
-            assert_eq!(c.value, ((&a - &b).complete() % &modulo + &modulo) % &modulo);
+            assert_eq!(
+                c.value,
+                ((&a - &b).complete() % &modulo + &modulo) % &modulo
+            );
 
             let c = &a_mod * &b_mod;
             assert_eq!(c.value, (&a * &b).complete() % &modulo);

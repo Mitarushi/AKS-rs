@@ -30,7 +30,15 @@ fn split_tokens(input: TokenStream) -> Vec<TokenStream> {
     result
 }
 
-fn generate_overload_code(generics: &TokenStream, trait_name: &TokenStream, type1: &TokenStream, type2: &TokenStream, output_type: &TokenStream, method_name: &TokenStream, method: &TokenStream) -> TokenStream {
+fn generate_overload_code(
+    generics: &TokenStream,
+    trait_name: &TokenStream,
+    type1: &TokenStream,
+    type2: &TokenStream,
+    output_type: &TokenStream,
+    method_name: &TokenStream,
+    method: &TokenStream,
+) -> TokenStream {
     let result = format!(
         r#"
         impl {generics} {trait_name}<{type2}> for {type1} {{
@@ -81,23 +89,56 @@ fn generate_overload_code(generics: &TokenStream, trait_name: &TokenStream, type
 pub fn overload(input: TokenStream) -> TokenStream {
     let input = split_tokens(input);
 
-    let (generics, trait_name, type1, type2, output_type, method_name, method) = match input.as_slice() {
-        [generics, trait_name, type1, type2, output_type, method_name, method] => (
-            generics, trait_name, type1, type2, output_type, method_name, method
-        ),
-        [generics, trait_nane, type1, type2, method_name, method] => (
-            generics, trait_nane, type1, type2, type1, method_name, method
-        ),
-        [generics, trait_nane, type1,method_name, method] => (
-            generics, trait_nane, type1, type1, type1, method_name, method
-        ),
-        _ => panic!("Invalid input")
-    };
+    let (generics, trait_name, type1, type2, output_type, method_name, method) =
+        match input.as_slice() {
+            [generics, trait_name, type1, type2, output_type, method_name, method] => (
+                generics,
+                trait_name,
+                type1,
+                type2,
+                output_type,
+                method_name,
+                method,
+            ),
+            [generics, trait_nane, type1, type2, method_name, method] => (
+                generics,
+                trait_nane,
+                type1,
+                type2,
+                type1,
+                method_name,
+                method,
+            ),
+            [generics, trait_nane, type1, method_name, method] => (
+                generics,
+                trait_nane,
+                type1,
+                type1,
+                type1,
+                method_name,
+                method,
+            ),
+            _ => panic!("Invalid input"),
+        };
 
-    generate_overload_code(generics, trait_name, type1, type2, output_type, method_name, method)
+    generate_overload_code(
+        generics,
+        trait_name,
+        type1,
+        type2,
+        output_type,
+        method_name,
+        method,
+    )
 }
 
-fn generate_unary_overload_code(generics: &TokenStream, trait_name: &TokenStream, type_: &TokenStream, method_name: &TokenStream, method: &TokenStream) -> TokenStream {
+fn generate_unary_overload_code(
+    generics: &TokenStream,
+    trait_name: &TokenStream,
+    type_: &TokenStream,
+    method_name: &TokenStream,
+    method: &TokenStream,
+) -> TokenStream {
     let result = format!(
         r#"
         impl {generics} {trait_name} for {type_} {{
@@ -126,22 +167,27 @@ fn generate_unary_overload_code(generics: &TokenStream, trait_name: &TokenStream
     result.parse().unwrap()
 }
 
-
 #[proc_macro]
 pub fn overload_unary(input: TokenStream) -> TokenStream {
     let input = split_tokens(input);
 
     let (generics, trait_name, type_, method_name, method) = match input.as_slice() {
-        [generics, trait_name, type_, method_name, method] => (
-            generics, trait_name, type_, method_name, method
-        ),
-        _ => panic!("Invalid input")
+        [generics, trait_name, type_, method_name, method] => {
+            (generics, trait_name, type_, method_name, method)
+        }
+        _ => panic!("Invalid input"),
     };
 
     generate_unary_overload_code(generics, trait_name, type_, method_name, method)
 }
 
-fn generate_overload_eq_code(generics: &TokenStream, trait_name: &TokenStream, type_: &TokenStream, method_name: &TokenStream, method: &TokenStream) -> TokenStream {
+fn generate_overload_eq_code(
+    generics: &TokenStream,
+    trait_name: &TokenStream,
+    type_: &TokenStream,
+    method_name: &TokenStream,
+    method: &TokenStream,
+) -> TokenStream {
     let result = format!(
         r#"
         impl {generics} {trait_name} for {type_} {{
@@ -150,11 +196,11 @@ fn generate_overload_eq_code(generics: &TokenStream, trait_name: &TokenStream, t
             }}
         }}
         "#,
-        generics = generics.to_string(),
-        trait_name = trait_name.to_string(),
-        type_ = type_.to_string(),
-        method_name = method_name.to_string(),
-        method = method.to_string()
+        generics = generics,
+        trait_name = trait_name,
+        type_ = type_,
+        method_name = method_name,
+        method = method
     );
 
     result.parse().unwrap()
@@ -165,10 +211,10 @@ pub fn overload_eq(input: TokenStream) -> TokenStream {
     let input = split_tokens(input);
 
     let (generics, trait_name, type_, method_name, method) = match input.as_slice() {
-        [generics, trait_name, type_, method_name, method] => (
-            generics, trait_name, type_, method_name, method
-        ),
-        _ => panic!("Invalid input")
+        [generics, trait_name, type_, method_name, method] => {
+            (generics, trait_name, type_, method_name, method)
+        }
+        _ => panic!("Invalid input"),
     };
 
     generate_overload_eq_code(generics, trait_name, type_, method_name, method)

@@ -5,7 +5,7 @@ use rug::Integer;
 
 use overload_macros::{overload, overload_eq, overload_unary};
 
-use crate::modint::{DivError, ModInt, ModRing};
+use crate::modint::DivError;
 use crate::poly_elem_trait::{PolyElem, PolyElemRing};
 
 #[derive(Clone, Debug)]
@@ -28,7 +28,7 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
     }
 
     pub fn reduce(coef: &mut Vec<T>) {
-        while coef.len() > 0 && coef.last().unwrap().is_zero() {
+        while !coef.is_empty() && coef.last().unwrap().is_zero() {
             coef.pop();
         }
     }
@@ -41,6 +41,17 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         }
         for (i, x) in other.coef.iter().enumerate() {
             coef[i] = &coef[i] + x;
+        }
+        Poly::reduce(&mut coef);
+        Poly::new(coef, self.ring)
+    }
+
+    fn add_i64(&self, other: &i64) -> Poly<'a, T> {
+        let mut coef = self.coef.clone();
+        if coef.is_empty() {
+            coef.push(self.ring.from_i64(*other));
+        } else {
+            coef[0] = &coef[0] + other;
         }
         Poly::reduce(&mut coef);
         Poly::new(coef, self.ring)
@@ -59,45 +70,56 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         Poly::new(coef, self.ring)
     }
 
-    fn to_single_integer(&self, step: u32) -> Integer {
-        let mut bit = vec![0; step as usize * self.coef.len()];
+    fn sub_i64(&self, other: &i64) -> Poly<'a, T> {
+        let mut coef = self.coef.clone();
+        if coef.is_empty() {
+            coef.push(self.ring.from_i64(-*other));
+        } else {
+            coef[0] = &coef[0] - other;
+        }
+        Poly::reduce(&mut coef);
+        Poly::new(coef, self.ring)
+    }
+
+    fn to_single_integer(&self, step: usize, min_len: usize) -> Integer {
+        let len = self.len();
+        let mut bit = vec![0; step * len];
         for (i, x) in self.coef.iter().enumerate() {
-            let idx_from = i * step as usize;
-            let idx_to = idx_from + step as usize;
-            x.write_digits(&mut bit[idx_from..idx_to]);
+            let idx_from = i * step;
+            let idx_to = idx_from + step;
+            x.write_digits(&mut bit[idx_from..idx_to], min_len);
         }
         Integer::from_digits(&bit, rug::integer::Order::LsfLe)
     }
 
-    fn from_single_integer(value: Integer, ring: &'a T::Ring, step: u32) -> Poly<'a, T> {
+    fn from_single_integer(
+        value: Integer,
+        ring: &'a T::Ring,
+        step: usize,
+        min_len: usize,
+    ) -> Poly<'a, T> {
         let bit = value.to_digits::<u64>(rug::integer::Order::LsfLe);
-        let mut coef = Vec::new();
-        coef.reserve(bit.len() / step as usize + 1);
-        for from_idx in (0..bit.len()).step_by(step as usize) {
-            let to_idx = min(from_idx + step as usize, bit.len());
-            coef.push(T::from_digits(ring, &bit[from_idx..to_idx]));
+        let mut coef = Vec::with_capacity(bit.len() / step + 1);
+        for from_idx in (0..bit.len()).step_by(step) {
+            let to_idx = min(from_idx + step, bit.len());
+            coef.push(T::from_digits(ring, &bit[from_idx..to_idx], min_len));
         }
         Poly::new(coef, ring)
     }
 
     fn mul_(&self, other: &Poly<'a, T>) -> Poly<'a, T> {
         let min_len = min(self.len(), other.len());
-        let required_bits = self.ring.mul_required_bits(min_len);
-        let step = (required_bits + 63) / 64;
-        let a = self.to_single_integer(step);
-        let b = other.to_single_integer(step);
+        let required_word = self.ring.poly_mul_required_words(min_len);
+        let a = self.to_single_integer(required_word, min_len);
+        let b = other.to_single_integer(required_word, min_len);
         let c = a * b;
-        Poly::from_single_integer(c, self.ring, step)
-    }
-
-    fn mul_elem(&self, other: &T) -> Poly<'a, T> {
-        let mut coef = self.coef.iter().map(|x| x * other).collect();
-        Poly::reduce(&mut coef);
-        Poly::new(coef, self.ring)
+        Poly::from_single_integer(c, self.ring, required_word, min_len)
     }
 
     fn mul_i64(&self, other: &i64) -> Poly<'a, T> {
-        self.mul_elem(&self.ring.from_i64(*other))
+        let mut coef = self.coef.iter().map(|x| x * other).collect();
+        Poly::reduce(&mut coef);
+        Poly::new(coef, self.ring)
     }
 
     fn neg_(&self) -> Poly<'a, T> {
@@ -120,7 +142,7 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
     }
 
     pub fn lc(&self) -> T {
-        if self.coef.len() == 0 {
+        if self.coef.is_empty() {
             self.ring.zero()
         } else {
             self.coef.last().unwrap().clone()
@@ -181,21 +203,23 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
     pub fn zero(ring: &'a T::Ring) -> Poly<'a, T> {
         Poly::new(vec![], ring)
     }
-}
 
-impl<'a> Poly<'a, ModInt<'a>> {
-    pub fn from_int_vec(coef: Vec<Integer>, ring: &'a ModRing) -> Poly<'a, ModInt<'_>> {
-        let mut coef = coef.into_iter().map(|x| ring.from(x)).collect();
+    pub fn from_int_vec(coef: Vec<Integer>, ring: &'a T::Ring) -> Poly<'a, T> {
+        let mut coef = coef.into_iter().map(|x| ring.from_integer(x)).collect();
         Poly::reduce(&mut coef);
         Poly::new(coef, ring)
     }
+
+    pub fn is_zero(&self) -> bool {
+        self.coef.is_empty()
+    }
 }
 
-
 overload!(<'a, T: PolyElem<'a>>, Add, Poly<'a, T>, add, add_);
+overload!(<'a, T: PolyElem<'a>>, Add, Poly<'a, T>, i64, add, add_i64);
 overload!(<'a, T: PolyElem<'a>>, Sub, Poly<'a, T>, sub, sub_);
+overload!(<'a, T: PolyElem<'a>>, Sub, Poly<'a, T>, i64, sub, sub_i64);
 overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, mul, mul_);
-overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, T, mul, mul_elem);
 overload!(<'a, T: PolyElem<'a>>, Mul, Poly<'a, T>, i64, mul, mul_i64);
 overload_unary!(<'a, T: PolyElem<'a>>, Neg, Poly<'a, T>, neg, neg_);
 overload!(<'a, T: PolyElem<'a>>, Shl, Poly<'a, T>, usize, shl, shl_);
@@ -223,16 +247,14 @@ impl<'a, T: PolyElem<'a>> IndexMut<usize> for Poly<'a, T> {
 
 #[cfg(test)]
 mod tests {
-    use rug::{Integer, rand};
-
     use super::*;
+    use crate::modint::ModRing;
+    use rug::{rand, Integer};
 
     #[test]
     fn test_poly() {
         let mut rng = rand::RandState::new();
-        let mut gen_random = || -> Integer {
-            Integer::from(Integer::random_bits(128, &mut rng))
-        };
+        let mut gen_random = || -> Integer { Integer::from(Integer::random_bits(128, &mut rng)) };
 
         for _ in 0..10 {
             let modulo = gen_random();

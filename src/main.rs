@@ -4,11 +4,11 @@ use rug::Integer;
 
 use crate::aks::aks;
 
+mod aks;
 mod modint;
 mod poly;
-mod poly_ring;
-mod aks;
 mod poly_elem_trait;
+mod poly_ring;
 
 fn main() {
     let mut rng = rug::rand::RandState::new();
