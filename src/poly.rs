@@ -220,6 +220,17 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
     pub fn is_zero(&self) -> bool {
         self.coef.is_empty()
     }
+
+    pub fn gcd(&self, other: &Poly<'a, T>) -> Result<Poly<'a, T>, DivError> {
+        let mut a = self.clone();
+        let mut b = other.clone();
+        while !b.is_zero() {
+            let r = a.rem(&b)?;
+            a = b;
+            b = r;
+        }
+        Ok(a)
+    }
 }
 
 overload!(<'a, T: PolyElem<'a>>, Add, Poly<'a, T>, add, add_);
