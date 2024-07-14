@@ -99,7 +99,7 @@ impl<'a, T: PolyElem<'a>> Poly<'a, T> {
         min_len: usize,
     ) -> Poly<'a, T> {
         let bit = value.to_digits::<u64>(rug::integer::Order::LsfLe);
-        let mut coef = Vec::with_capacity(bit.len() / step + 1);
+        let mut coef = Vec::with_capacity((bit.len() + step - 1) / step);
         for from_idx in (0..bit.len()).step_by(step) {
             let to_idx = min(from_idx + step, bit.len());
             coef.push(T::from_digits(ring, &bit[from_idx..to_idx], min_len));

@@ -296,7 +296,7 @@ impl<'b, 'a: 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> PolyElem<'b>
     fn write_digits(&self, digits: &mut [u64], min_len: usize) {
         let self_len = self.ring.modulo.len() * 2 - 1;
         let elem_min_len = min_len * self_len;
-        let elem_size = self.ring.poly_mul_required_words(elem_min_len);
+        let elem_size = self.ring.modulo.ring.poly_mul_required_words(elem_min_len);
 
         for (i, x) in self.value.coef.iter().enumerate() {
             let from_pos = elem_size * i;
@@ -308,12 +308,14 @@ impl<'b, 'a: 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> PolyElem<'b>
     fn from_digits(ring: &'b Self::Ring, digits: &[u64], min_len: usize) -> Self {
         let self_len = ring.modulo.len() * 2 - 1;
         let elem_min_len = min_len * self_len;
-        let elem_size = ring.poly_mul_required_words(elem_min_len);
+        let elem_size = ring.modulo.ring.poly_mul_required_words(elem_min_len);
 
-        let value_coef = (0..self_len)
+        let digits_elem_len = (digits.len() + elem_size - 1) / elem_size;
+
+        let value_coef = (0..digits_elem_len)
             .map(|i| {
                 let from_pos = elem_size * i;
-                let to_pos = elem_size * (i + 1);
+                let to_pos = min(elem_size * (i + 1), digits.len());
                 T::from_digits(ring.modulo.ring, &digits[from_pos..to_pos], elem_min_len)
             })
             .collect();
@@ -334,27 +336,32 @@ impl<'b, 'a: 'b, T: PolyElem<'a>, U: FastPolyDivTrait<'a, T>> PolyElem<'b>
 #[cfg(test)]
 mod tests {
     use rug::Integer;
-
+    use rug::rand::RandState;
     use crate::modint::{ModInt, ModRing};
 
     use super::*;
 
+    fn random_int(rng: &mut RandState) -> Integer {
+        Integer::from(Integer::random_bits(128, rng))
+    }
+
+    fn random_poly<'a>(rng: &mut RandState, d: usize, n_ring: &'a ModRing) -> Poly<'a, ModInt<'a>> {
+        let coef = (0..=d).map(|_| n_ring.from(random_int(rng))).collect::<Vec<_>>();
+        Poly::new(coef, n_ring)
+    }
+
     #[test]
     fn test_mod_poly() {
-        let mut rng = rug::rand::RandState::new();
-        let mut random_int = || Integer::from(Integer::random_bits(128, &mut rng));
+        let mut rng = RandState::new();
 
         for _ in 0..10 {
-            let n = random_int();
-            let n = n.next_prime();
+            let n = random_int(&mut rng).next_prime();
             let n_ring = ModRing::new(n.clone());
 
-            let mut modulo_coef = (0..128).map(|_| random_int()).collect::<Vec<_>>();
-            modulo_coef.push(Integer::from(1));
-            let modulo = Poly::<ModInt>::from_int_vec(modulo_coef, &n_ring);
+            let modulo = random_poly(&mut rng, 127, &n_ring) + Poly::x_power_of(&n_ring, 128);
             let ring = ModPolyRing::new(modulo.clone());
 
-            let a = random_int();
+            let a = random_int(&mut rng);
             let x_a = Poly::from_int_vec(vec![a.clone(), Integer::from(1)], &n_ring);
             let x_a = ring.from(x_a);
             let x_a_pow = x_a.pow(&n);
@@ -365,6 +372,40 @@ mod tests {
             let x_pow_a = &x_pow + &ring.from_bounded(Poly::from_int_vec(vec![a.clone()], &n_ring));
 
             assert_eq!(x_a_pow.value, x_pow_a.value);
+
+            println!("ok");
+        }
+    }
+
+    #[test]
+    fn test_mod_poly_of_mod_poly() {
+        let mut rng = RandState::new();
+
+        for _ in 0..10 {
+            let n = random_int(&mut rng).next_prime();
+            let n_ring = ModRing::new(n.clone());
+
+            let mod_deg = 5;
+            let mod_poly = random_poly(&mut rng, mod_deg - 1, &n_ring) + Poly::x_power_of(&n_ring, mod_deg);
+            let mod_poly_ring = ModPolyRing::new(mod_poly);
+
+            let poly_deg = 128;
+            let poly_a_coef = (0..=poly_deg).map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring))).collect();
+            let poly_a = Poly::new(poly_a_coef, &mod_poly_ring);
+            let poly_b_coef = (0..=poly_deg).map(|_| mod_poly_ring.from(random_poly(&mut rng, mod_deg, &n_ring))).collect();
+            let poly_b = Poly::new(poly_b_coef, &mod_poly_ring);
+
+            let poly_c_coef = (&poly_a * &poly_b).coef;
+
+            let mut poly_c_coef_naive = vec![mod_poly_ring.zero(); 2 * poly_deg + 1];
+            for (i, a) in poly_a.coef.iter().enumerate() {
+                for (j, b) in poly_b.coef.iter().enumerate() {
+                    poly_c_coef_naive[i + j] = &poly_c_coef_naive[i + j] + a * b;
+                }
+            }
+            Poly::reduce(&mut poly_c_coef_naive);
+
+            assert_eq!(poly_c_coef, poly_c_coef_naive);
         }
     }
 }
