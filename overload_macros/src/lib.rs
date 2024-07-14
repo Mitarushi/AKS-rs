@@ -73,13 +73,13 @@ fn generate_overload_code(
             }}
         }}
         "#,
-        generics = generics.to_string(),
-        trait_name = trait_name.to_string(),
-        type1 = type1.to_string(),
-        type2 = type2.to_string(),
-        output_type = output_type.to_string(),
-        method_name = method_name.to_string(),
-        method = method.to_string()
+        generics = generics,
+        trait_name = trait_name,
+        type1 = type1,
+        type2 = type2,
+        output_type = output_type,
+        method_name = method_name,
+        method = method
     );
 
     result.parse().unwrap()
@@ -157,11 +157,11 @@ fn generate_unary_overload_code(
             }}
         }}
         "#,
-        generics = generics.to_string(),
-        trait_name = trait_name.to_string(),
-        type_ = type_.to_string(),
-        method_name = method_name.to_string(),
-        method = method.to_string()
+        generics = generics,
+        trait_name = trait_name,
+        type_ = type_,
+        method_name = method_name,
+        method = method
     );
 
     result.parse().unwrap()
