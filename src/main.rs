@@ -1,8 +1,9 @@
 #![feature(trait_alias)]
 
+use clap::{Parser, ValueEnum};
 use rug::Integer;
 
-use crate::aks::aks;
+use crate::aks::{aks, quartic_aks};
 
 mod aks;
 mod modint;
@@ -10,16 +11,30 @@ mod poly;
 mod poly_elem_trait;
 mod poly_ring;
 
+#[derive(Debug, Clone, ValueEnum)]
+enum Algorithm {
+    Aks,
+    QuarticAks,
+}
+#[derive(Parser)]
+struct Cli {
+    #[arg(short, long, required = true)]
+    n: Integer,
+    #[arg(short, long, default_value = "quartic-aks")]
+    algorithm: Algorithm
+}
+
 fn main() {
-    let mut rng = rug::rand::RandState::new();
-    let mut random_int = || Integer::from(Integer::random_bits(100, &mut rng));
+    let args = Cli::parse();
+    let n = args.n;
 
-    for _ in 0..10 {
-        let n = random_int();
-        let n = n.next_prime();
+    let start = std::time::Instant::now();
+    let is_prime = match args.algorithm {
+        Algorithm::Aks => aks(&n),
+        Algorithm::QuarticAks => quartic_aks(&n),
+    };
+    let elapsed = start.elapsed();
 
-        let start = std::time::Instant::now();
-        println!("{} is prime: {}", n, aks(&n));
-        println!("time: {:?}", start.elapsed());
-    }
+    println!("{} is proven to be {}.", n, if is_prime { "prime" } else { "composite" });
+    println!("Elapsed: {}.{:03} sec", elapsed.as_secs(), elapsed.subsec_millis());
 }

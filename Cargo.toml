@@ -9,3 +9,4 @@ members = ["overload_macros"]
 [dependencies]
 rug = "1.24.1"
 overload_macros = { path = "overload_macros" }
+clap = { version = "4.5.13", features = ["derive"] }
