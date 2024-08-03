@@ -147,7 +147,7 @@ fn find_min_rd(n: &Integer) -> (i64, u32) {
 
         if is_first {
             push(&mut heap, min_r(n, d + 1), d + 1, true);
-            nd_vec.push(n.pow(d + 1).complete());
+            nd_vec.push(n.pow(d + 1).complete() - Integer::ONE);
             // max_r_vec.push(max_r(n, d + 1));
         }
 
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn test_large_prime_quartic_aks() {
         let mut rng = RandState::new();
-        let mut random_int = || Integer::from(Integer::random_bits(50, &mut rng));
+        let mut random_int = || Integer::from(Integer::random_bits(70, &mut rng));
 
         for _ in 0..5 {
             let n = random_int().next_prime();
