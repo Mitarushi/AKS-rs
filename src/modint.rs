@@ -3,6 +3,7 @@ use std::fmt::{Debug, Display};
 use std::ops::{Add, Mul, Neg, Sub};
 
 use rug::integer::Order;
+use rug::rand::RandState;
 use rug::{Assign, Integer};
 
 use overload_macros::{overload, overload_eq, overload_unary};
@@ -147,6 +148,10 @@ impl ModRing {
 
     pub fn one(&self) -> ModInt {
         self.from_bounded(Integer::from(1))
+    }
+
+    pub fn random_from(&self, rng: &mut RandState) -> ModInt {
+        self.from_bounded(Integer::random_below_ref(&self.modulo, rng).into())
     }
 }
 
